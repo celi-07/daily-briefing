@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.ai import AIError, GeminiEngine, same_ids, validate_draft
+from app.ai import AIError, GeminiEngine, provider_failure, same_ids, validate_draft
 from app.config import Settings
 from app.models import Assessments, Claim, CitedNote, Draft, Drafts, Synthesis, Verdicts
 
@@ -145,3 +145,65 @@ def test_connections_audited_and_invented_schedule_rejected(article_factory,even
     stories = [engine.summarize(e,registry) for e in events]
     notes = engine.synthesize(stories,registry)
     assert len(notes) == 1 and notes[0].kind == 'connection'
+
+
+def test_provider_rejection_reports_total_not_batch_sizes(article_factory, event_factory, caplog):
+    articles = [article_factory(i) for i in range(10)]
+    events = [event_factory(a) for a in articles]
+    for event in events:
+        event.assessment = None
+    class Rejected(Exception):
+        code = 400
+        message = 'Invalid response_schema; API key: DO-NOT-LOG-THIS'
+    calls = []
+    def transport(*args):
+        calls.append(1)
+        raise Rejected()
+    notices = []
+    engine = GeminiEngine(Settings(), transport)
+    engine.assess(events, {a.id: a for a in articles}, notices)
+    assert len(calls) == 1
+    assert len(notices) == 1 and '10 event(s)' in notices[0] and 'schema' in notices[0]
+    assert 'DO-NOT-LOG-THIS' not in caplog.text + str(notices)
+    assert all(event.assessment is None for event in events)
+
+
+@pytest.mark.parametrize('code,message,expected', [
+    (400, 'API key not valid. Please pass a valid API key.', 'key invalid'),
+    (400, 'Your API key was reported as leaked and is blocked.', 'key blocked'),
+    (400, 'Request contains invalid argument.', 'rejected the request'),
+    (429, 'Quota exhausted.', 'quota'),
+    (504, 'Deadline exceeded.', 'timed out'),
+    (404, 'Model missing.', 'model or endpoint'),
+])
+def test_provider_failure_classification(code, message, expected):
+    error = type('ProviderError', (Exception,), {'code': code, 'message': message})()
+    assert expected in provider_failure(error)
+
+
+@pytest.mark.parametrize('schema', [Assessments, Drafts, Verdicts, Synthesis])
+def test_real_sdk_sends_json_schema_without_legacy_conversion(schema):
+    import httpx
+    from google import genai
+    from google.genai import types
+    captured = []
+    def endpoint(request):
+        payload = json.loads(request.content)
+        captured.append(payload)
+        config = payload['generationConfig']
+        assert 'responseSchema' not in config
+        assert config['responseJsonSchema'] == schema.model_json_schema()
+        assert 'additional_properties' not in json.dumps(config)
+        assert config['responseJsonSchema']['additionalProperties'] is False
+        return httpx.Response(200, json={'candidates': [{'content': {'role': 'model',
+            'parts': [{'text': '{"items":[]}'}]}, 'finishReason': 'STOP'}],
+            'usageMetadata': {'totalTokenCount': 12}})
+    engine = GeminiEngine(Settings())
+    engine.client = genai.Client(api_key='offline-placeholder', http_options=types.HttpOptions(
+        client_args={'transport': httpx.MockTransport(endpoint)}))
+    try:
+        text, tokens = engine._generate('Return an empty items array.', schema, 'offline-model')
+        assert schema.model_validate_json(text).items == [] and tokens == 12
+        assert len(captured) == 1
+    finally:
+        engine.close()

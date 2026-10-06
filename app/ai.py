@@ -3,6 +3,7 @@ import logging
 import random
 import re
 import time
+from collections import Counter
 from hashlib import sha256
 
 from pydantic import ValidationError
@@ -15,6 +16,31 @@ log = logging.getLogger(__name__)
 
 class AIError(RuntimeError):
     pass
+
+
+def provider_failure(exc):
+    """Classify provider errors without logging raw requests, details, or secrets."""
+    code = getattr(exc, "code", None)
+    message = str(getattr(exc, "message", "") or "").lower()
+    if re.search(r"api key (?:is )?(?:not valid|invalid|expired)|invalid api key", message):
+        return "Gemini API key invalid or expired; replace GEMINI_API_KEY"
+    if "api key" in message and any(word in message for word in ("blocked", "leaked")):
+        return "Gemini API key blocked; replace GEMINI_API_KEY"
+    if code in (401, 403):
+        return "Gemini authentication or permission failure"
+    if code == 404:
+        return "Configured Gemini model or endpoint unavailable"
+    if code == 429:
+        return "Gemini quota or rate limit exhausted"
+    if code == 400 and any(word in message for word in ("schema", "generation_config", "generationconfig")):
+        return "Gemini rejected the structured-output schema or generation configuration (HTTP 400)"
+    if code == 400:
+        return "Gemini rejected the request (HTTP 400); run Gemini Diagnostics for the provider reason"
+    if code in (408, 504):
+        return "Gemini request timed out"
+    if code in (500, 502, 503):
+        return "Gemini service temporarily unavailable"
+    return "Gemini request failed; run Gemini Diagnostics for details"
 
 
 def same_ids(items, expected):
@@ -62,6 +88,7 @@ class GeminiEngine:
         self.client = None
         self.transport = transport
         self.unavailable = False
+        self.failure_reason = ""
 
     def _generate(self, prompt, schema, model):
         if self.transport:
@@ -75,8 +102,9 @@ class GeminiEngine:
             self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000))
         from google.genai import types
         response = self.client.models.generate_content(model=model, contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema,
-                                               temperature=.2, max_output_tokens=8192))
+            config=types.GenerateContentConfig(response_mime_type="application/json",
+                response_json_schema=schema.model_json_schema(), temperature=.2, max_output_tokens=8192,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)))
         if response.candidates and str(response.candidates[0].finish_reason).endswith("MAX_TOKENS"):
             raise AIError("AI output truncated")
         usage = response.usage_metadata
@@ -89,7 +117,7 @@ class GeminiEngine:
         if key in self.cache:
             return self.cache[key]
         if self.unavailable:
-            raise AIError("AI unavailable for this run")
+            raise AIError(self.failure_reason or "AI unavailable for this run")
         reserve = len(prompt) // 2 + 8192
         models = list(dict.fromkeys(filter(None, [self.settings.gemini_model, self.settings.gemini_fallback_model])))
         for model in models:
@@ -97,7 +125,8 @@ class GeminiEngine:
                 if (self.requests >= self.settings.ai_requests or self.tokens + reserve > self.settings.ai_tokens
                         or time.monotonic() - self.started >= self.settings.ai_seconds):
                     self.unavailable = True
-                    raise AIError("AI request/token/time budget exhausted")
+                    self.failure_reason = "AI request/token/time budget exhausted"
+                    raise AIError(self.failure_reason)
                 self.requests += 1
                 self.tokens += reserve
                 try:
@@ -108,7 +137,8 @@ class GeminiEngine:
                     self.cache[key] = result
                     return result
                 except (ValidationError, ValueError) as exc:
-                    raise AIError("Invalid structured AI response") from exc
+                    self.failure_reason = "Invalid structured AI response"
+                    raise AIError(self.failure_reason) from exc
                 except AIError:
                     raise
                 except Exception as exc:
@@ -117,13 +147,15 @@ class GeminiEngine:
                         time.sleep(min(20, 2 ** attempt + random.random()))
                         continue
                     # Never log provider exception text (may include request data/API key).
-                    log.warning("Gemini request failed (%s, status %s)", type(exc).__name__, code or "unknown")
+                    self.failure_reason = provider_failure(exc)
+                    log.warning("Gemini request failed (%s, status %s): %s", type(exc).__name__,
+                                code or "unknown", self.failure_reason)
                     if code in (401, 403):
                         self.unavailable = True
-                        raise AIError("Gemini authentication/configuration failed") from None
+                        raise AIError(self.failure_reason) from None
                     break
         self.unavailable = True
-        raise AIError("Configured Gemini models unavailable")
+        raise AIError(self.failure_reason or "Configured Gemini models unavailable")
 
     def evidence(self, events, registry):
         data = []
@@ -148,20 +180,24 @@ class GeminiEngine:
             event.assessment = by_id[event.id]
 
     def assess(self, events, registry, notices):
+        failures = Counter()
         def batch(items):
             try:
                 self.assess_batch(items, registry)
-            except AIError:
+            except AIError as exc:
                 # Malformed/truncated batches split without silently dropping the tail.
                 if len(items) > 1 and not self.unavailable:
                     middle = len(items) // 2
                     batch(items[:middle])
                     batch(items[middle:])
                 else:
-                    notices.append(f"AI assessment unavailable for {len(items)} event(s); coverage incomplete.")
+                    failures[str(exc)] += len(items)
         size = self.settings.ai_batch_size
         for offset in range(0, len(events), size):
             batch(events[offset:offset + size])
+        for reason, count in failures.items():
+            log.warning("AI assessment unavailable for %d event(s): %s", count, reason)
+            notices.append(f"AI assessment unavailable for {count} event(s): {reason}; coverage incomplete.")
 
     def summarize(self, event, registry):
         data = self.evidence([event], registry)
