@@ -1,0 +1,33 @@
+name: Tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix scripts/checkpoint --ignore-scripts
+      - run: node scripts/checkpoint/test.cjs
+      - run: python briefing.py --fixture tests/fixtures/sample-digest.json --dry-run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: email-preview-python-${{ matrix.python }}
+          path: artifacts/
+          retention-days: 7

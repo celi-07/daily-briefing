@@ -1,0 +1,712 @@
+{
+  "cutoff": "2026-10-06T01:00:00+00:00",
+  "articles": [
+    {
+      "id": "sample-0",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/0",
+      "title": "Central bank publishes its monetary policy decision",
+      "text": "The fictional central bank released a policy statement describing its latest interest-rate decision. Officials published supporting data and a calendar for their next review. This is synthetic evidence for email preview testing, not a real policy announcement.",
+      "author": "",
+      "published_at": "2026-10-06T00:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "finance"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-1",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/1",
+      "title": "Regional bank reports quarterly results",
+      "text": "A fictional regional bank released its quarterly earnings report with commentary about deposit trends and operating costs. The report is available from its investor relations page. This sample demonstrates an attributed financial source excerpt.",
+      "author": "",
+      "published_at": "2026-10-05T23:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "finance"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-2",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/2",
+      "title": "Statistics agency releases its monthly inflation report",
+      "text": "A fictional statistics agency published a monthly inflation report. The bulletin separates headline and core price trends and documents its measurement methodology. The sample is intentionally synthetic and contains no real market forecast.",
+      "author": "",
+      "published_at": "2026-10-05T22:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "finance"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-3",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/3",
+      "title": "Blockchain network publishes a protocol upgrade proposal",
+      "text": "A fictional network team published a protocol upgrade proposal and a public consultation timetable. The proposal describes changes to network processing and outlines outstanding review steps. It remains a proposal, and this is synthetic preview evidence.",
+      "author": "",
+      "published_at": "2026-10-05T21:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-4",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/4",
+      "title": "Exchange announces changes to its custody reporting",
+      "text": "A fictional exchange announced a new custody reporting process. The announcement describes the documents it plans to publish and the scope of the reporting. It is the exchange’s own statement, not independent verification of the company’s assets.",
+      "author": "",
+      "published_at": "2026-10-05T20:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-5",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/5",
+      "title": "Regulator opens a consultation on stablecoin oversight",
+      "text": "A fictional regulator opened a public consultation concerning stablecoin oversight. The document invites comments from payment providers and describes proposed reporting obligations. The consultation has not become a final rule; this sample is synthetic evidence.",
+      "author": "",
+      "published_at": "2026-10-05T19:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-6",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/6",
+      "title": "Research team publishes a security audit for a DeFi protocol",
+      "text": "A fictional research team published a security audit of a decentralized finance protocol. The audit describes its review scope and the limitations of its findings. The review is not a guarantee of future security, and the story is synthetic sample content.",
+      "author": "",
+      "published_at": "2026-10-05T18:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-7",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/7",
+      "title": "Asset manager publishes its digital asset fund disclosure",
+      "text": "A fictional asset manager published updated fund disclosure documents for its digital asset product. The documents outline the product structure and its main risk factors. This sample is synthetic and does not recommend an investment.",
+      "author": "",
+      "published_at": "2026-10-05T17:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-8",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/8",
+      "title": "Infrastructure provider releases a blockchain data tool",
+      "text": "A fictional infrastructure provider released a blockchain data tool with documentation about coverage and update frequency. The announcement describes the tool’s intended use for developers. Advertised benefits have not been independently verified in this synthetic sample.",
+      "author": "",
+      "published_at": "2026-10-05T16:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-9",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/9",
+      "title": "Public institution releases digital currency research",
+      "text": "A fictional public institution released a research paper about digital currency settlement. The paper documents the scope of its experiment and identifies topics for further study. A research publication is not an announcement of a live currency launch.",
+      "author": "",
+      "published_at": "2026-10-05T15:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "crypto"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-10",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/10",
+      "title": "Bank Indonesia menerbitkan laporan kebijakan",
+      "text": "Bank Indonesia adalah nama entitas dalam contoh sintetis ini. Contoh ini menjelaskan penerbitan laporan kebijakan dan pentingnya memisahkan fakta dari perkiraan. Ini bukan berita nyata atau pengumuman Bank Indonesia; hanya untuk pengujian sumber berbahasa Indonesia.",
+      "author": "",
+      "published_at": "2026-10-05T14:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "indonesia"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-11",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/11",
+      "title": "Indonesian manufacturers publish their investment outlook",
+      "text": "A fictional group of Indonesian manufacturers published an investment outlook report. The report describes survey responses about capacity and supply chains. This is synthetic preview content rather than a forecast of the Indonesian economy.",
+      "author": "",
+      "published_at": "2026-10-05T13:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "indonesia"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-12",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/12",
+      "title": "Chipmaker publishes plans for a new manufacturing facility",
+      "text": "A fictional chipmaker announced plans for a manufacturing facility and outlined the next steps in its approval process. The company has not yet completed construction. This sample preserves the distinction between plans and completed developments.",
+      "author": "",
+      "published_at": "2026-10-06T00:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "tech"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-13",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/13",
+      "title": "Research laboratory publishes a model evaluation study",
+      "text": "A fictional laboratory released a model evaluation study documenting methods, benchmarks and limitations. The study’s claims apply to its stated evaluation conditions. This synthetic sample shows how research evidence should be distinguished from promotional claims.",
+      "author": "",
+      "published_at": "2026-10-05T23:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "tech"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    },
+    {
+      "id": "sample-14",
+      "source_id": "sample",
+      "source_name": "Synthetic Preview Source",
+      "source_type": "rss",
+      "trust": "reporter",
+      "url": "https://example.com/sample/14",
+      "title": "Cloud provider announces an infrastructure expansion",
+      "text": "A fictional cloud provider announced plans to expand infrastructure capacity. Its statement describes the intended service region and the approvals still required. This synthetic sample is an attributed announcement, not independent confirmation of promised performance.",
+      "author": "",
+      "published_at": "2026-10-05T22:00:00Z",
+      "fetched_at": "2026-10-06T01:00:00Z",
+      "language": "unknown",
+      "quality": "excerpt",
+      "topics": [
+        "tech"
+      ],
+      "linked_urls": [],
+      "warnings": []
+    }
+  ],
+  "assessments": {
+    "sample-0": {
+      "event_key": "Central bank publishes its monetary policy decision 2026-10-06",
+      "topic": "finance",
+      "secondary_topics": [],
+      "entities": [
+        "Central"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-0"
+      ],
+      "facts": [
+        {
+          "text": "The fictional central bank released a policy statement describing its latest interest-rate decision. Officials published supporting data and a calendar for their next review. This is synthetic evidence for email preview testing, not a real policy announcement.",
+          "article_ids": [
+            "sample-0"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-1": {
+      "event_key": "Regional bank reports quarterly results 2026-10-06",
+      "topic": "finance",
+      "secondary_topics": [],
+      "entities": [
+        "Regional"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-1"
+      ],
+      "facts": [
+        {
+          "text": "A fictional regional bank released its quarterly earnings report with commentary about deposit trends and operating costs. The report is available from its investor relations page. This sample demonstrates an attributed financial source excerpt.",
+          "article_ids": [
+            "sample-1"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-2": {
+      "event_key": "Statistics agency releases its monthly inflation report 2026-10-06",
+      "topic": "finance",
+      "secondary_topics": [],
+      "entities": [
+        "Statistics"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-2"
+      ],
+      "facts": [
+        {
+          "text": "A fictional statistics agency published a monthly inflation report. The bulletin separates headline and core price trends and documents its measurement methodology. The sample is intentionally synthetic and contains no real market forecast.",
+          "article_ids": [
+            "sample-2"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-3": {
+      "event_key": "Blockchain network publishes a protocol upgrade proposal 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Blockchain"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-3"
+      ],
+      "facts": [
+        {
+          "text": "A fictional network team published a protocol upgrade proposal and a public consultation timetable. The proposal describes changes to network processing and outlines outstanding review steps. It remains a proposal, and this is synthetic preview evidence.",
+          "article_ids": [
+            "sample-3"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-4": {
+      "event_key": "Exchange announces changes to its custody reporting 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Exchange"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-4"
+      ],
+      "facts": [
+        {
+          "text": "A fictional exchange announced a new custody reporting process. The announcement describes the documents it plans to publish and the scope of the reporting. It is the exchange’s own statement, not independent verification of the company’s assets.",
+          "article_ids": [
+            "sample-4"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-5": {
+      "event_key": "Regulator opens a consultation on stablecoin oversight 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Regulator"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-5"
+      ],
+      "facts": [
+        {
+          "text": "A fictional regulator opened a public consultation concerning stablecoin oversight. The document invites comments from payment providers and describes proposed reporting obligations. The consultation has not become a final rule; this sample is synthetic evidence.",
+          "article_ids": [
+            "sample-5"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-6": {
+      "event_key": "Research team publishes a security audit for a DeFi protocol 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Research"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-6"
+      ],
+      "facts": [
+        {
+          "text": "A fictional research team published a security audit of a decentralized finance protocol. The audit describes its review scope and the limitations of its findings. The review is not a guarantee of future security, and the story is synthetic sample content.",
+          "article_ids": [
+            "sample-6"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-7": {
+      "event_key": "Asset manager publishes its digital asset fund disclosure 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Asset"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-7"
+      ],
+      "facts": [
+        {
+          "text": "A fictional asset manager published updated fund disclosure documents for its digital asset product. The documents outline the product structure and its main risk factors. This sample is synthetic and does not recommend an investment.",
+          "article_ids": [
+            "sample-7"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-8": {
+      "event_key": "Infrastructure provider releases a blockchain data tool 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Infrastructure"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-8"
+      ],
+      "facts": [
+        {
+          "text": "A fictional infrastructure provider released a blockchain data tool with documentation about coverage and update frequency. The announcement describes the tool’s intended use for developers. Advertised benefits have not been independently verified in this synthetic sample.",
+          "article_ids": [
+            "sample-8"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-9": {
+      "event_key": "Public institution releases digital currency research 2026-10-06",
+      "topic": "crypto",
+      "secondary_topics": [],
+      "entities": [
+        "Public"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-9"
+      ],
+      "facts": [
+        {
+          "text": "A fictional public institution released a research paper about digital currency settlement. The paper documents the scope of its experiment and identifies topics for further study. A research publication is not an announcement of a live currency launch.",
+          "article_ids": [
+            "sample-9"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-10": {
+      "event_key": "Bank Indonesia menerbitkan laporan kebijakan 2026-10-06",
+      "topic": "indonesia",
+      "secondary_topics": [],
+      "entities": [
+        "Bank"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-10"
+      ],
+      "facts": [
+        {
+          "text": "Bank Indonesia adalah nama entitas dalam contoh sintetis ini. Contoh ini menjelaskan penerbitan laporan kebijakan dan pentingnya memisahkan fakta dari perkiraan. Ini bukan berita nyata atau pengumuman Bank Indonesia; hanya untuk pengujian sumber berbahasa Indonesia.",
+          "article_ids": [
+            "sample-10"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-11": {
+      "event_key": "Indonesian manufacturers publish their investment outlook 2026-10-06",
+      "topic": "indonesia",
+      "secondary_topics": [],
+      "entities": [
+        "Indonesian"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-11"
+      ],
+      "facts": [
+        {
+          "text": "A fictional group of Indonesian manufacturers published an investment outlook report. The report describes survey responses about capacity and supply chains. This is synthetic preview content rather than a forecast of the Indonesian economy.",
+          "article_ids": [
+            "sample-11"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-12": {
+      "event_key": "Chipmaker publishes plans for a new manufacturing facility 2026-10-06",
+      "topic": "tech",
+      "secondary_topics": [],
+      "entities": [
+        "Chipmaker"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-12"
+      ],
+      "facts": [
+        {
+          "text": "A fictional chipmaker announced plans for a manufacturing facility and outlined the next steps in its approval process. The company has not yet completed construction. This sample preserves the distinction between plans and completed developments.",
+          "article_ids": [
+            "sample-12"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-13": {
+      "event_key": "Research laboratory publishes a model evaluation study 2026-10-06",
+      "topic": "tech",
+      "secondary_topics": [],
+      "entities": [
+        "Research"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-13"
+      ],
+      "facts": [
+        {
+          "text": "A fictional laboratory released a model evaluation study documenting methods, benchmarks and limitations. The study’s claims apply to its stated evaluation conditions. This synthetic sample shows how research evidence should be distinguished from promotional claims.",
+          "article_ids": [
+            "sample-13"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    },
+    "sample-14": {
+      "event_key": "Cloud provider announces an infrastructure expansion 2026-10-06",
+      "topic": "tech",
+      "secondary_topics": [],
+      "entities": [
+        "Cloud"
+      ],
+      "scores": {
+        "impact": 4,
+        "relevance": 5,
+        "novelty": 4,
+        "urgency": 3
+      },
+      "evidence": "supported",
+      "independent_origins": [
+        "sample-14"
+      ],
+      "facts": [
+        {
+          "text": "A fictional cloud provider announced plans to expand infrastructure capacity. Its statement describes the intended service region and the approvals still required. This synthetic sample is an attributed announcement, not independent confirmation of promised performance.",
+          "article_ids": [
+            "sample-14"
+          ]
+        }
+      ],
+      "reason": "Synthetic fixture: manually labeled important for selection and rendering verification."
+    }
+  }
+}

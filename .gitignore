@@ -2,3 +2,10 @@
 preview.html
 *.pyc
 .venv/
+__pycache__/
+.pytest_cache/
+artifacts/
+.state/
+preview-*.html
+preview*.txt
+node_modules/

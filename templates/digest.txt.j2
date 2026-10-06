@@ -1,0 +1,31 @@
+MORNING BRIEFING — {{ digest.edition_date }}{% if total > 1 %} — Part {{ index }}/{{ total }}{% endif %}
+News window: {{ digest.window_start|localtime }} – {{ digest.window_end|localtime }}
+
+{% if index == 1 %}{% if takeaways %}AT A GLANCE
+{% for story in takeaways %}{{ loop.index }}. {{ story.headline }} ({{ labels[story.topic] }})
+{% endfor %}{% endif %}
+{% if digest.quotes %}MARKET SNAPSHOT — latest available daily observations
+{% for q in digest.quotes %}{{ q.label }}: {% if q.unavailable %}unavailable{% else %}{{ "{:,.2f}".format(q.price) }} {{ q.unit }}; {% if q.change_pct is not none %}{{ "{:+.2f}%".format(q.change_pct) }}{% else %}change unavailable{% endif %}; daily-bar session date {{ q.session_date }}{% if q.stale %} (older observation / market may be closed){% endif %}{% endif %}
+{% endfor %}{% endif %}{% endif %}
+{% for topic in topics %}{% set section = stories|selectattr('topic', 'equalto', topic)|list %}{% if section or total == 1 %}
+{{ labels[topic]|upper }} — {{ section|length }} stories{% if topic in continued %} (continued){% endif %}
+{% if not section %}{{ empty_states[topic] }}{% endif %}
+{% for story in section %}
+{{ story.headline }}
+Event: {{ story.event_id }} · {{ story.published_at|localtime }} · {{ status_labels[story.status] }}{% if story.importance is not none %} · Importance {{ story.importance|int }}/100{% endif %}
+{{ story.summary }}
+{% if story.why_it_matters %}Why it matters: {{ story.why_it_matters }}{% endif %}
+{% if story.caveat %}{{ story.caveat }}{% endif %}
+{% for citation in story.citations %}Read {{ citation.source }}: {{ citation.url }}
+{% endfor %}{% endfor %}{% endif %}{% endfor %}
+{% if show_notes %}{% for note in digest.notes %}{{ 'CONNECTING THE DOTS' if note.kind == 'connection' else 'WHAT TO WATCH' }}
+{{ note.text }}
+{% for sid in note.story_ids if sid in note_sources %}{{ note_sources[sid].source }}: {{ note_sources[sid].url }}
+{% endfor %}{% endfor %}{% endif %}
+COVERAGE & SOURCES
+{% for notice in digest.notices %}{{ notice }}
+{% endfor %}{% for source in digest.health if source.status != 'ok' %}{{ source.name }}: {{ source.status }}. {{ source.detail }}
+{% endfor %}
+All qualifying stories in the collected evidence are included. Importance scores are editorial judgments.
+Automated briefing · Gemini & publisher sources · {{ digest.pipeline_version }}
+{% if total > 1 %}Part {{ index }} of {{ total }}. Read all numbered emails for the full briefing.{% endif %}

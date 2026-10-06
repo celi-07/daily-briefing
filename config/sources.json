@@ -1,0 +1,273 @@
+[
+  {
+    "id": "bbc-business",
+    "name": "BBC Business",
+    "kind": "rss",
+    "url": "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "cnbc-top-news",
+    "name": "CNBC Top News",
+    "kind": "rss",
+    "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "cnbc-finance",
+    "name": "CNBC Finance",
+    "kind": "rss",
+    "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "marketwatch",
+    "name": "MarketWatch",
+    "kind": "rss",
+    "url": "http://feeds.marketwatch.com/marketwatch/topstories/",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "npr-business",
+    "name": "NPR Business",
+    "kind": "rss",
+    "url": "https://feeds.npr.org/1006/rss.xml",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "wsj-markets",
+    "name": "WSJ Markets",
+    "kind": "rss",
+    "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "bloomberg",
+    "name": "Bloomberg",
+    "kind": "rss",
+    "url": "https://feeds.bloomberg.com/markets/news.rss",
+    "topics": [
+      "finance"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "coindesk",
+    "name": "CoinDesk",
+    "kind": "rss",
+    "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "cointelegraph",
+    "name": "CoinTelegraph",
+    "kind": "rss",
+    "url": "https://cointelegraph.com/rss",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "bitcoin-magazine",
+    "name": "Bitcoin Magazine",
+    "kind": "rss",
+    "url": "https://bitcoinmagazine.com/feed",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "the-block",
+    "name": "The Block",
+    "kind": "rss",
+    "url": "https://www.theblock.co/rss.xml",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "pintu-news",
+    "name": "Pintu News",
+    "kind": "rss",
+    "url": "https://pintu.co.id/news/rss-feed.xml",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "pintu-market",
+    "name": "Pintu Market",
+    "kind": "rss",
+    "url": "https://pintu.co.id/news/categories/market/rss-feed.xml",
+    "topics": [
+      "crypto"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "nikkei-asia",
+    "name": "Nikkei Asia",
+    "kind": "rss",
+    "url": "https://asia.nikkei.com/rss/feed/nar",
+    "topics": [
+      "indonesia"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "scmp-se-asia",
+    "name": "SCMP SE Asia",
+    "kind": "rss",
+    "url": "https://www.scmp.com/rss/318208/feed",
+    "topics": [
+      "indonesia"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "channel-news-asia",
+    "name": "Channel News Asia",
+    "kind": "rss",
+    "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511",
+    "topics": [
+      "indonesia"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "straits-times-asia",
+    "name": "Straits Times Asia",
+    "kind": "rss",
+    "url": "https://www.straitstimes.com/news/asia/rss.xml",
+    "topics": [
+      "indonesia"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "techcrunch",
+    "name": "TechCrunch",
+    "kind": "rss",
+    "url": "https://techcrunch.com/feed/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "ars-technica",
+    "name": "Ars Technica",
+    "kind": "rss",
+    "url": "https://feeds.arstechnica.com/arstechnica/index",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "the-verge",
+    "name": "The Verge",
+    "kind": "rss",
+    "url": "https://www.theverge.com/rss/index.xml",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "mit-tech-review",
+    "name": "MIT Tech Review",
+    "kind": "rss",
+    "url": "https://www.technologyreview.com/feed/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "wired",
+    "name": "Wired",
+    "kind": "rss",
+    "url": "https://www.wired.com/feed/rss",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "cryptowave",
+    "name": "Cryptowave",
+    "kind": "cryptowave",
+    "url": "https://cryptowave.co.id/",
+    "topics": [
+      "crypto",
+      "finance",
+      "indonesia",
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "x",
+    "name": "X",
+    "kind": "x",
+    "topics": [
+      "finance",
+      "crypto",
+      "indonesia",
+      "tech"
+    ],
+    "trust": "unknown",
+    "enabled": true,
+    "queries": [],
+    "primary_accounts": []
+  }
+]
