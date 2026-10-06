@@ -17,14 +17,13 @@ def main():
     key = settings.gemini_api_key.get_secret_value()
     if not key:
         raise SystemExit('GEMINI_API_KEY missing')
-    client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=30_000))
-    probes = [('plain', 'Reply with OK.', None),
-              ('assessment-schema', 'Return an empty items array as JSON.', Assessments)]
+    client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000))
+    probes = [('assessment-schema', 'Return an empty items array as JSON.', Assessments),
+              ('plain', 'Reply with OK.', None)]
     try:
         for label, prompt, schema in probes:
             try:
-                config = types.GenerateContentConfig(max_output_tokens=256, temperature=.2,
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
+                config = types.GenerateContentConfig(max_output_tokens=8192 if schema else 256, temperature=.2)
                 if schema:
                     config.response_mime_type = 'application/json'
                     config.response_schema = schema
@@ -39,8 +38,6 @@ def main():
                 message = re.sub(r'AIza[\w-]+', '[REDACTED]', message)
                 print(json.dumps({'probe': label, 'model': settings.gemini_model, 'status': 'rejected',
                     'http_code': getattr(exc, 'code', None), 'message': message[:1500]}), flush=True)
-                if label == 'plain':
-                    return 1
         return 0
     finally:
         client.close()
