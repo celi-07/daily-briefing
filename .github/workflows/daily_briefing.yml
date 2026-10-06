@@ -2,8 +2,9 @@ name: Daily Morning Briefing
 
 on:
   schedule:
-    # Runs at 00:00 UTC (around 7:00 AM WIB/Jakarta time) every day
-    - cron: '0 0 * * *'
+    # Runs at 00:45 UTC = 07:45 AM WIB — with concurrent fetching
+    # the script finishes in ~5-10 min, so email arrives before 8 AM WIB
+    - cron: '45 0 * * *'
   workflow_dispatch: # Allows you to manually trigger the script from the Actions tab
 
 jobs:

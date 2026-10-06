@@ -29,6 +29,7 @@ import sys
 import logging
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
@@ -62,6 +63,13 @@ LOCAL_TZ = timezone(timedelta(hours=7))
 
 # Number of stories to show per category
 STORIES_PER_CATEGORY = 5
+
+# Gemini model fallback chain — try fastest/most-reliable first
+GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
+]
 
 # ─── RSS Feeds ────────────────────────────────────────────────────────
 FINANCE_FEEDS = {
@@ -308,12 +316,26 @@ def fetch_category_articles(
     client: genai.Client,
     hours: int = 24,
 ) -> list[dict]:
-    """Fetch articles for a category and rank by semantic relevance."""
+    """Fetch articles for a category and rank by semantic relevance.
+
+    Uses concurrent fetching to speed up RSS retrieval.
+    """
     all_articles = []
-    for name, url in feeds.items():
-        arts = fetch_feed_articles(name, url, hours)
-        log.info(f"  ✓ {name}: {len(arts)} articles")
-        all_articles.extend(arts)
+
+    # Fetch all feeds concurrently
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(fetch_feed_articles, name, url, hours): name
+            for name, url in feeds.items()
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                arts = future.result()
+                log.info(f"  ✓ {name}: {len(arts)} articles")
+                all_articles.extend(arts)
+            except Exception as e:
+                log.warning(f"  ⚠ {name} failed: {e}")
 
     if not all_articles:
         return []
@@ -616,78 +638,82 @@ Rules:
   from related context or noting the quiet landscape and what to expect
 - Return ONLY valid JSON — no markdown fences, no commentary outside the JSON"""
 
-    max_retries = 3
-    text = ""
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.1-pro-preview",
-                contents=prompt,
-            )
-            text = response.text.strip()
+    # Try each model in the fallback chain
+    for model_name in GEMINI_MODELS:
+        log.info(f"  Trying model: {model_name}")
+        max_retries = 2
+        text = ""
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                text = response.text.strip()
 
-            # Strip markdown code fences if present
-            if text.startswith("```"):
-                text = re.sub(r"^```(?:json)?\s*\n?", "", text)
-                text = re.sub(r"\n?\s*```\s*$", "", text)
+                # Strip markdown code fences if present
+                if text.startswith("```"):
+                    text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+                    text = re.sub(r"\n?\s*```\s*$", "", text)
 
-            result = json.loads(text)
+                result = json.loads(text)
 
-            # Log what the AI produced
-            for key in ("finance", "crypto", "indonesia", "tech"):
-                sec = result.get(key, {})
-                n = len(sec.get("stories", []))
-                hl = sec.get("headline", "N/A")
-                log.info(f"  AI → {key}: {n} stories, headline: {hl}")
-            log.info(f"  AI → connections: {len(result.get('connections', ''))} chars")
+                # Log what the AI produced
+                log.info(f"  ✅ Success with model: {model_name}")
+                for key in ("finance", "crypto", "indonesia", "tech"):
+                    sec = result.get(key, {})
+                    n = len(sec.get("stories", []))
+                    hl = sec.get("headline", "N/A")
+                    log.info(f"  AI → {key}: {n} stories, headline: {hl}")
+                log.info(f"  AI → connections: {len(result.get('connections', ''))} chars")
 
-            # Ensure each section has stories — fill from raw articles if needed
-            category_map = {
-                "finance": finance_articles,
-                "crypto": crypto_articles,
-                "indonesia": indonesia_articles,
-                "tech": tech_articles,
-            }
-            for key, raw_articles in category_map.items():
-                section = result.get(key, {})
-                stories = section.get("stories", [])
-                if len(stories) < STORIES_PER_CATEGORY and raw_articles:
-                    # Pad with raw article data
-                    existing_titles = {s.get("title", "").lower() for s in stories}
-                    for a in raw_articles:
-                        if len(stories) >= STORIES_PER_CATEGORY:
-                            break
-                        if a["title"].lower() not in existing_titles:
-                            stories.append({
-                                "title": a["title"],
-                                "summary": a["summary"][:300] or "Details available at source.",
-                                "analysis": f"Source: {a['source']}.",
-                                "source_url": a.get("link", ""),
-                            })
-                            existing_titles.add(a["title"].lower())
-                    section["stories"] = stories
-                    result[key] = section
+                # Ensure each section has stories — fill from raw articles if needed
+                category_map = {
+                    "finance": finance_articles,
+                    "crypto": crypto_articles,
+                    "indonesia": indonesia_articles,
+                    "tech": tech_articles,
+                }
+                for key, raw_articles in category_map.items():
+                    section = result.get(key, {})
+                    stories = section.get("stories", [])
+                    if len(stories) < STORIES_PER_CATEGORY and raw_articles:
+                        # Pad with raw article data
+                        existing_titles = {s.get("title", "").lower() for s in stories}
+                        for a in raw_articles:
+                            if len(stories) >= STORIES_PER_CATEGORY:
+                                break
+                            if a["title"].lower() not in existing_titles:
+                                stories.append({
+                                    "title": a["title"],
+                                    "summary": a["summary"][:300] or "Details available at source.",
+                                    "analysis": f"Source: {a['source']}.",
+                                    "source_url": a.get("link", ""),
+                                })
+                                existing_titles.add(a["title"].lower())
+                        section["stories"] = stories
+                        result[key] = section
 
-            return result
+                return result
 
-        except json.JSONDecodeError as e:
-            log.error(f"Failed to parse Gemini JSON: {e}")
-            if text:
-                log.debug(f"Raw response: {text[:500]}")
-            break  # Don't retry JSON parse errors
-        except Exception as e:
-            err_str = str(e)
-            if ("503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str
-                    or "RESOURCE_EXHAUSTED" in err_str) and attempt < max_retries - 1:
-                wait = (attempt + 1) * 20
-                log.warning(f"  Gemini API temporarily unavailable, retrying in {wait}s... (attempt {attempt + 1}/{max_retries})")
-                time.sleep(wait)
-            else:
-                log.error(f"Gemini API error: {e}")
-                break
+            except json.JSONDecodeError as e:
+                log.error(f"Failed to parse JSON from {model_name}: {e}")
+                if text:
+                    log.debug(f"Raw response: {text[:500]}")
+                break  # Don't retry JSON parse errors — try next model
+            except Exception as e:
+                err_str = str(e)
+                if ("503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str
+                        or "RESOURCE_EXHAUSTED" in err_str) and attempt < max_retries - 1:
+                    wait = (attempt + 1) * 10
+                    log.warning(f"  {model_name} temporarily unavailable, retrying in {wait}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                else:
+                    log.warning(f"  {model_name} failed: {e} — trying next model...")
+                    break  # Try next model in the chain
 
-    # Fallback: build from raw articles instead of returning empty placeholders
-    log.info("  Building fallback analysis from raw article data...")
+    # All models failed — fallback to raw articles
+    log.info("  All Gemini models failed. Building fallback analysis from raw article data...")
     return _build_fallback_analysis(
         finance_articles, crypto_articles, indonesia_articles,
         tech_articles, market_data,
@@ -745,7 +771,7 @@ def _story_html(story: dict, index: int, accent: str, accent_light: str) -> str:
         if url else f'<span style="color:#f1f5f9;">{title}</span>'
     )
 
-    return f"""<div style="margin-bottom:20px;padding:18px 20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:10px;border-left:3px solid {accent};">
+    return f"""<div class="story-card" style="margin-bottom:20px;padding:18px 20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:10px;border-left:3px solid {accent};">
 <div style="display:flex;align-items:flex-start;gap:12px;">
 <div style="flex-shrink:0;width:24px;height:24px;background:{accent};border-radius:6px;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#0f172a;">{index}</div>
 <div style="flex:1;">
@@ -814,56 +840,74 @@ def build_html_email(analysis: dict, market_data: list[dict]) -> str:
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   * {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }}
   a:hover {{ opacity: 0.85; }}
+  /* Responsive overrides for email clients that support <style> */
+  @media only screen and (max-width: 680px) {{
+    .email-container {{ width: 100% !important; border-radius: 0 !important; }}
+    .email-body-cell {{ padding-left: 20px !important; padding-right: 20px !important; }}
+    .header-cell {{ padding: 28px 20px 24px !important; }}
+    .header-title {{ font-size: 24px !important; }}
+    .footer-cell {{ padding: 20px !important; }}
+    .card-inner {{ padding: 16px 16px !important; }}
+    .story-card {{ padding: 14px 14px !important; }}
+  }}
+  @media only screen and (max-width: 480px) {{
+    .email-body-cell {{ padding-left: 14px !important; padding-right: 14px !important; }}
+    .header-cell {{ padding: 24px 14px 20px !important; }}
+    .header-title {{ font-size: 22px !important; }}
+    .footer-cell {{ padding: 16px 14px !important; }}
+    .card-inner {{ padding: 14px 12px !important; }}
+    .story-card {{ padding: 12px 12px !important; }}
+  }}
 </style>
 </head>
 <body style="margin:0;padding:0;background:#0a0f1a;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
 
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0f1a;padding:24px 0;">
-<tr><td align="center">
-<table width="680" cellpadding="0" cellspacing="0" style="max-width:680px;width:100%;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+<tr><td align="center" style="padding:0 8px;">
+<table class="email-container" width="680" cellpadding="0" cellspacing="0" style="max-width:680px;width:100%;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);box-shadow:0 25px 50px rgba(0,0,0,0.5);">
 
 <!-- ═══ HEADER ═══ -->
-<tr><td style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1a1a2e 100%);padding:40px 44px 36px;text-align:center;position:relative;">
+<tr><td class="header-cell" style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1a1a2e 100%);padding:40px 44px 36px;text-align:center;position:relative;">
 <div style="margin-bottom:16px;">
 <span style="display:inline-block;background:linear-gradient(135deg,#3b82f6,#8b5cf6);padding:6px 16px;border-radius:20px;font-size:10px;color:#fff;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">DAILY DIGEST</span>
 </div>
-<h1 style="margin:0;font-size:32px;color:#f8fafc;font-weight:900;letter-spacing:-1px;line-height:1.2;">Morning Briefing</h1>
+<h1 class="header-title" style="margin:0;font-size:32px;color:#f8fafc;font-weight:900;letter-spacing:-1px;line-height:1.2;">Morning Briefing</h1>
 <p style="margin:10px 0 0;font-size:13px;color:#64748b;font-weight:500;">{date_str}</p>
 <div style="margin-top:20px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);"></div>
 </td></tr>
 
 <!-- ═══ MARKET SNAPSHOT ═══ -->
-<tr><td style="padding:28px 44px 0;">
+<tr><td class="email-body-cell" style="padding:28px 44px 0;">
 <table width="100%" cellpadding="0" cellspacing="0"><tr>
 <td><span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;">Market Snapshot</span></td>
 <td align="right"><span style="font-size:10px;color:#475569;">{time_str} WIB</span></td>
 </tr></table>
 <div style="margin-top:12px;">{market_bar}</div>
-<div style="margin-top:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:16px 20px;">
+<div class="card-inner" style="margin-top:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:16px 20px;">
 <p style="margin:0;font-size:13px;color:#cbd5e1;line-height:1.75;">{mkt_summary}</p>
 </div>
 </td></tr>
 
 <!-- ═══ DIVIDER ═══ -->
-<tr><td style="padding:28px 44px 0;"><div style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);"></div></td></tr>
+<tr><td class="email-body-cell" style="padding:28px 44px 0;"><div style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);"></div></td></tr>
 
 <!-- ═══ NEWS SECTIONS ═══ -->
-<tr><td style="padding:28px 44px 0;">{sections}</td></tr>
+<tr><td class="email-body-cell" style="padding:28px 44px 0;">{sections}</td></tr>
 
 <!-- ═══ KEY TAKEAWAYS ═══ -->
-<tr><td style="padding:0 44px 24px;">
-<div style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(52,211,153,0.04));border:1px solid rgba(52,211,153,0.15);border-radius:14px;padding:24px 28px;">
+<tr><td class="email-body-cell" style="padding:0 44px 24px;">
+<div class="card-inner" style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(52,211,153,0.04));border:1px solid rgba(52,211,153,0.15);border-radius:14px;padding:24px 28px;">
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="width:32px;height:32px;background:rgba(52,211,153,0.15);border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:32px;color:#34d399;font-weight:800;">&#10003;</td>
 <td style="padding-left:12px;"><h2 style="margin:0;font-size:16px;color:#6ee7b7;font-weight:700;">Key Takeaways</h2></td>
 </tr></table>
-<table style="margin-top:16px;" cellpadding="0" cellspacing="0">{takeaways}</table>
+<table style="margin-top:16px;width:100%;" cellpadding="0" cellspacing="0">{takeaways}</table>
 </div>
 </td></tr>
 
 <!-- ═══ CONNECTING THE DOTS ═══ -->
-<tr><td style="padding:0 44px 24px;">
-<div style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(167,139,250,0.04));border:1px solid rgba(139,92,246,0.15);border-radius:14px;padding:24px 28px;">
+<tr><td class="email-body-cell" style="padding:0 44px 24px;">
+<div class="card-inner" style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(167,139,250,0.04));border:1px solid rgba(139,92,246,0.15);border-radius:14px;padding:24px 28px;">
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="width:32px;height:32px;background:rgba(139,92,246,0.15);border-radius:8px;text-align:center;vertical-align:middle;font-size:16px;line-height:32px;color:#a78bfa;">&#8644;</td>
 <td style="padding-left:12px;"><h2 style="margin:0;font-size:16px;color:#c4b5fd;font-weight:700;">Connecting the Dots</h2></td>
@@ -873,18 +917,18 @@ def build_html_email(analysis: dict, market_data: list[dict]) -> str:
 </td></tr>
 
 <!-- ═══ WHAT TO WATCH ═══ -->
-<tr><td style="padding:0 44px 32px;">
-<div style="background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(251,191,36,0.04));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:24px 28px;">
+<tr><td class="email-body-cell" style="padding:0 44px 32px;">
+<div class="card-inner" style="background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(251,191,36,0.04));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:24px 28px;">
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="width:32px;height:32px;background:rgba(245,158,11,0.15);border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:32px;color:#fbbf24;font-weight:800;">&#9654;</td>
 <td style="padding-left:12px;"><h2 style="margin:0;font-size:16px;color:#fde68a;font-weight:700;">What to Watch</h2></td>
 </tr></table>
-<table style="margin-top:16px;" cellpadding="0" cellspacing="0">{watch_items}</table>
+<table style="margin-top:16px;width:100%;" cellpadding="0" cellspacing="0">{watch_items}</table>
 </div>
 </td></tr>
 
 <!-- ═══ FOOTER ═══ -->
-<tr><td style="background:rgba(0,0,0,0.2);padding:28px 44px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);">
+<tr><td class="footer-cell" style="background:rgba(0,0,0,0.2);padding:28px 44px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);">
 <p style="margin:0;font-size:11px;color:#475569;font-weight:500;">Generated by Morning Briefing &middot; Powered by Gemini &amp; RSS</p>
 <p style="margin:6px 0 0;font-size:10px;color:#334155;">{time_str} WIB &middot; Automated digest, not financial advice</p>
 </td></tr>
@@ -937,23 +981,42 @@ def main():
     api_key = get_env("GEMINI_API_KEY")
     gemini_client = genai.Client(api_key=api_key)
 
-    # 1 ─ Fetch news ───────────────────────────────────────────────────
-    log.info("📰 Fetching finance articles...")
-    finance_articles = deduplicate_articles(
-        fetch_category_articles(FINANCE_FEEDS, "finance", gemini_client)
-    )
-    log.info("📰 Fetching crypto articles...")
-    crypto_articles = deduplicate_articles(
-        fetch_category_articles(CRYPTO_FEEDS, "crypto", gemini_client)
-    )
-    log.info("📰 Fetching Indonesian market articles...")
-    indonesia_articles = deduplicate_articles(
-        fetch_category_articles(INDONESIA_FEEDS, "indonesia", gemini_client)
-    )
-    log.info("📰 Fetching tech articles...")
-    tech_articles = deduplicate_articles(
-        fetch_category_articles(TECH_FEEDS, "tech", gemini_client)
-    )
+    # 1 ─ Fetch news + market data in parallel ─────────────────────────
+    log.info("📰 Fetching all categories and market data concurrently...")
+
+    category_tasks = [
+        ("finance", FINANCE_FEEDS),
+        ("crypto", CRYPTO_FEEDS),
+        ("indonesia", INDONESIA_FEEDS),
+        ("tech", TECH_FEEDS),
+    ]
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Submit all category fetches
+        cat_futures = {
+            executor.submit(
+                lambda c, f: (c, deduplicate_articles(fetch_category_articles(f, c, gemini_client))),
+                cat, feeds
+            ): cat
+            for cat, feeds in category_tasks
+        }
+        # Submit market data fetch
+        market_future = executor.submit(fetch_market_snapshot)
+
+        for future in as_completed(list(cat_futures.keys()) + [market_future]):
+            if future == market_future:
+                market_data = future.result()
+                log.info(f"📈 Market data: {len(market_data)} tickers")
+            else:
+                cat_name, articles = future.result()
+                results[cat_name] = articles
+                log.info(f"📰 {cat_name}: {len(articles)} articles")
+
+    finance_articles = results.get("finance", [])
+    crypto_articles = results.get("crypto", [])
+    indonesia_articles = results.get("indonesia", [])
+    tech_articles = results.get("tech", [])
 
     total = sum(map(len, [finance_articles, crypto_articles, indonesia_articles, tech_articles]))
     log.info(
@@ -961,10 +1024,6 @@ def main():
         f"(Finance:{len(finance_articles)} Crypto:{len(crypto_articles)} "
         f"Indonesia:{len(indonesia_articles)} Tech:{len(tech_articles)})"
     )
-
-    # 2 ─ Market data ──────────────────────────────────────────────────
-    log.info("📈 Fetching market data...")
-    market_data = fetch_market_snapshot()
 
     # 3 ─ AI analysis ──────────────────────────────────────────────────
     log.info("🤖 Generating AI analysis with Gemini...")
