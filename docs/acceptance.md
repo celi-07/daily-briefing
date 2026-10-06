@@ -1,0 +1,49 @@
+# Acceptance report
+
+6 October 2026. Implementation baseline: `e2358d8`. Tests use synthetic evidence unless explicitly identified as a read-only live check.
+
+## Measured verification
+
+| Check | Result |
+|---|---|
+| Offline Python suite | 43 tests pass on Python 3.10.20 and 3.12.14 |
+| Artifact SDK | Real SDK imports under Node 24; mocked upload-before-delete and trusted-restore checks pass |
+| Source checks | BBC Business: 12 dated RSS articles; Cryptowave: nine dated articles, all with extracted full text, both `ok` at check time |
+| Viewport checks | Edge/Chromium at 320, 375, 768 and 1440px, both light/dark: no horizontal overflow; all 15 sample stories retained |
+| Offline CLI | `--fixture ... --dry-run` saves HTML, equivalent text, digest JSON and coverage JSON; no SMTP/source/market network calls |
+| Important story counts | 0, 3, 7 and 20 per topic preserved exactly; oversized output partitions without missing or duplicate event IDs |
+| Citation coverage | All 15 sample stories have source citations; no duplicate story/event IDs |
+| Package audit | Checkpoint package lock resolves with zero reported npm vulnerabilities at installation time |
+
+The same saved synthetic sample was compared with the baseline's actual `_build_fallback_stories` implementation:
+
+| Topic | Manually labeled important | Baseline fallback | New pipeline |
+|---|---:|---:|---:|
+| Finance | 3 | 3 | 3 |
+| Crypto | 7 | 5 | 7 |
+| Indonesia | 2 | 2 | 2 |
+| Technology | 3 | 3 | 3 |
+
+This demonstrates removal of the fallback cap: sample recall rises from 13/15 to 15/15. It is **not** a live AI quality benchmark. New fixture orchestration takes approximately 0.003 seconds excluding imports, collection and rendering; AI requests/tokens are zero. Live AI latency, token consumption and editorial accuracy remain unmeasured.
+
+## Behavior exercised
+
+- Below-threshold, disputed and title-only events are not padded into confirmed sections. Unknown social claims cannot pass the configured-primary-source gate.
+- Exact-title copies, X links and RSS evidence retain a single event with provenance. Indonesian/English copies with the same precise event identity merge and are reassessed; distinct actions remain distinct.
+- Missing/future/old dates, WIB conversion, malformed feeds, the former first-25 RSS limitation, changed Cryptowave listing markup, X pagination and missing credentials, 429 failures and request/response budgets are tested.
+- Invalid/truncated structured responses split without dropping the final event; missing/duplicate/unknown IDs, invented numeric values/citations, hostile source input, authentication failures, fallback models and exhausted AI budgets have explicit failure behavior.
+- Generated drafts need an evidence-audit pass. Rejected drafts fall back to source excerpts. Optional synthesis rejects unsupported schedules/source IDs and audits retained connections.
+- HTML text/attributes are escaped; disallowed URL schemes, authenticated cross-host redirects, loopback/private/link-local addresses and nonpublic network connections are rejected. Fetched source instructions cannot bypass deterministic citation/numeric guards.
+- One market observation has unknown change, explicit units and its own timestamp. Older observations are labeled; unknown timezones remain unavailable.
+- Plain text contains the same event IDs and original links as HTML. Header/footer/synthesis space is reserved during email partitioning. Delivery state freezes part payloads; corrupt manifests, uncertain acceptance and failed remote checkpoints prevent an unprotected resend.
+
+## Setup and remaining verification
+
+- X is implemented and fixture-tested but not live-tested: no X credential or verified query list was supplied. Configure separate API access, bearer token and vetted account/topic queries before enabling it.
+- Cryptowave public article extraction is live-verified; there is no claim of a private API/RSS integration. Publisher layout and robots policy may change.
+- Live Gemini generation/auditing has not been tested with an account credential. Previously exposed credentials are not written into the repository or used for testing. Verify a rotated Gemini key and configured model in a dry-run before scheduled production.
+- No actual email was sent. Gmail web/iOS/Android, Apple Mail macOS/iOS, Outlook web/mobile and classic Outlook Windows still need recipient-side rendering checks, including dark mode and clipping. Browser previews verify layout, not email-client compatibility.
+- The checkpoint SDK and restoration logic are offline-tested; actual cross-run artifact persistence must be verified in GitHub Actions on the default branch. The workflow fails closed before SMTP if remote state cannot be persisted/restored.
+- Importance calibration and cross-language clustering require human review on real news. Gemini evidence audits reduce unsupported output but do not guarantee factual correctness of the underlying reporting. No numerical live hallucination-rate claim is made.
+
+Reviewable sample artifacts are produced in the CI **Tests** workflow and through `python briefing.py --fixture tests/fixtures/sample-digest.json --dry-run`.

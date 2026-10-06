@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Synthetic Fixture</title><link>https://example.com</link><description>Tests only</description>
+<item><title>Valid WIB morning news</title><link>https://example.com/a?utm_source=test</link><pubDate>Tue, 06 Oct 2026 07:30:00 +0700</pubDate><description>Fictional central bank announcement for the test suite, not real news.</description></item>
+<item><title>Old article</title><link>https://example.com/old</link><pubDate>Sat, 03 Oct 2026 07:30:00 +0700</pubDate></item>
+<item><title>Unknown date</title><link>https://example.com/unknown</link></item>
+<item><title>Future date</title><link>https://example.com/future</link><pubDate>Wed, 07 Oct 2026 07:30:00 +0700</pubDate></item>
+</channel></rss>
