@@ -1,8 +1,6 @@
 name: Gemini Diagnostics
 on:
   workflow_dispatch:
-  push:
-    branches: [fix/gemini-assessment-diagnostics]
 permissions:
   contents: read
 jobs:
