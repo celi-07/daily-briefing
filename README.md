@@ -82,6 +82,12 @@ The latest repository schedule is preserved: **00:45 UTC / 07:45 WIB daily**. Gi
 
 The artifact checkpoint SDK requires Node 24, provisioned by the workflow; ordinary local usage remains Python-only. Artifact runtime credentials are masked and exported only within the delivery job. Production checkpoints require GitHub-hosted Actions; a normal local run uses `.state/` without remote artifact uploading.
 
+### Diagnose Gemini without sending email
+
+Run **Gemini Diagnostics** manually on the default branch to test the four structured response schemas using the configured Gemini secret/model. It makes four small live API calls, prints sanitized results, and fails if any probe is rejected or invalid. It does not collect news, fetch markets, access Gmail, or modify delivery state. It may consume Gemini quota. Local equivalent: `python scripts/diagnose_gemini.py` with credentials set in the environment.
+
+Assessment failures report the total affected event count and a safe failure category, distinguishing API rejection, authentication, quota, timeout, malformed output and budget exhaustion. HTTP 400 means the provider rejected a request before assessment; it does not mean every summary failed the evidence audit. Strict Pydantic records are sent through `response_json_schema`, preserving `additionalProperties: false` without converting it into the unsupported legacy `additional_properties` field.
+
 ## Verification
 
 ```sh

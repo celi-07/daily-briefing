@@ -41,9 +41,17 @@ This demonstrates removal of the fallback cap: sample recall rises from 13/15 to
 
 - X is implemented and fixture-tested but not live-tested: no X credential or verified query list was supplied. Configure separate API access, bearer token and vetted account/topic queries before enabling it.
 - Cryptowave public article extraction is live-verified; there is no claim of a private API/RSS integration. Publisher layout and robots policy may change.
-- Live Gemini generation/auditing has not been tested with an account credential. Previously exposed credentials are not written into the repository or used for testing. Verify a rotated Gemini key and configured model in a dry-run before scheduled production.
+- Full live Gemini news generation/auditing remains unverified. Chat-pasted credentials are not copied into the repository; the targeted probes below use only the existing GitHub Actions secret. Verify a rotated Gemini key and configured model in a dry-run before scheduled production.
 - No actual email was sent. Gmail web/iOS/Android, Apple Mail macOS/iOS, Outlook web/mobile and classic Outlook Windows still need recipient-side rendering checks, including dark mode and clipping. Browser previews verify layout, not email-client compatibility.
 - The checkpoint SDK and restoration logic are offline-tested; actual cross-run artifact persistence must be verified in GitHub Actions on the default branch. The workflow fails closed before SMTP if remote state cannot be persisted/restored.
 - Importance calibration and cross-language clustering require human review on real news. Gemini evidence audits reduce unsupported output but do not guarantee factual correctness of the underlying reporting. No numerical live hallucination-rate claim is made.
 
 Reviewable sample artifacts are produced in the CI **Tests** workflow and through `python briefing.py --fixture tests/fixtures/sample-digest.json --dry-run`.
+
+## Gemini schema regression and diagnosis
+
+The first production run after merge collected 322 events but made just one AI request, rejected with HTTP 400. A targeted live probe reproduced the exact failure: the SDK serialized strict Pydantic `additionalProperties: false` through the legacy response-schema field as `additional_properties`, which the API rejected. This was request rejection, not 322 failed summary audits.
+
+The fix uses `response_json_schema=model.model_json_schema()` and retains strict local validation. Four regression cases inspect real SDK HTTP serialization without network access. Safe error categories and aggregated affected-event counts replace repeated generic batch notices. The suite now has 54 passing tests on Python 3.10 and 3.12.
+
+[Live corrected-schema probes](https://github.com/celi-07/daily-briefing/actions/runs/37445989576) accepted and validated empty assessment and summary responses using the configured Gemini secret/model. Verification and synthesis probes received temporary HTTP 503 high-demand errors; their live success is not claimed. [Original-schema probe](https://github.com/celi-07/daily-briefing/actions/runs/37445705544) reproduced the unsupported field. No news collection, SMTP, or production delivery-state mutation occurred in these probes. The diagnostic workflow is manual-only in the final change.
