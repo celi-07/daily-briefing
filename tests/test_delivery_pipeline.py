@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from app.config import Settings
-from app.delivery import load_state, prepare_state, send_state, state_path
+from app.delivery import load_state, prepare_state, send_state
 from app.market import quote_from_history
 from app.models import Digest, RenderedPart, SourceHealth
 from app.pipeline import build_digest, main

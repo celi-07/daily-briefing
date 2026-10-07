@@ -95,8 +95,11 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         stories = sort_stories(stories)
         eligible_ids = [s.event_id for s in stories if s.importance is not None]
         notes = engine.synthesize(stories, registry)
-        log.info("Events: %d; eligible: %d; excerpts/unassessed: %d; AI requests: %d; tokens: %d",
-                 len(events), len(chosen), sum(s.status != "verified-analysis" for s in stories), engine.requests, engine.tokens)
+        log.info("Events: %d; assessed: %d; eligible: %d; AI-verified: %d; excerpts/unassessed: %d; "
+                 "AI requests: %d; tokens: %d",
+                 len(events), sum(e.assessment is not None for e in events), len(chosen),
+                 sum(s.status == "verified-analysis" for s in stories),
+                 sum(s.status != "verified-analysis" for s in stories), engine.requests, engine.tokens)
         return Digest(edition_date=cutoff.astimezone(ZoneInfo(settings.timezone)).date().isoformat(),
             window_start=start, window_end=cutoff, timezone=settings.timezone, stories=stories,
             quotes=quotes or [], health=health, notices=list(dict.fromkeys(notices)),

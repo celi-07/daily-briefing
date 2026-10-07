@@ -77,7 +77,8 @@ def main():
         raise SystemExit('GEMINI_API_KEY missing')
     if args.mode == 'end-to-end':
         return 0 if end_to_end(settings)['status'] == 'passed' else 1
-    client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000))
+    client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000,
+        retry_options=types.HttpRetryOptions(attempts=1)))
     probes = [(name, 'Return an empty items array as JSON.', schema) for name, schema in
               [('assessment-schema', Assessments), ('summary-schema', Drafts),
                ('verification-schema', Verdicts), ('synthesis-schema', Synthesis)]]

@@ -28,7 +28,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ inputs.model != 'configured' && inputs.model || vars.GEMINI_MODEL }}
-          GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL }}
+          GEMINI_FALLBACK_MODEL: ${{ inputs.model == 'configured' && (vars.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite') || '' }}
           DIAGNOSTIC_MODE: ${{ inputs.mode || 'schemas' }}
         run: python scripts/diagnose_gemini.py --mode "$DIAGNOSTIC_MODE"
       - name: Save diagnostic preview

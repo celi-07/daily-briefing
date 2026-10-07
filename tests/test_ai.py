@@ -127,7 +127,88 @@ def test_configurable_model_fallback_and_retry(monkeypatch,event_factory,article
         return Assessments(items=[event.assessment]).model_dump_json(),100
     engine = GeminiEngine(Settings(gemini_model='primary-model',gemini_fallback_model='fallback-model'),transport)
     engine.assess_batch([event],{a.id:a})
-    assert models == ['primary-model']*3 + ['fallback-model']
+    assert models == ['primary-model', 'fallback-model']
+    assert engine.preferred_model == 'fallback-model'
+    engine.assess_batch([event], {a.id: a})
+    assert models == ['primary-model', 'fallback-model']  # Original cache key still works after switching.
+
+
+@pytest.mark.parametrize('code', [408, 429, 503])
+def test_slow_primary_hands_off_before_assessment_allowance_expires(monkeypatch, article_factory, event_factory, code):
+    clock = {'elapsed': 0.0}
+    monkeypatch.setattr('app.ai.time.monotonic', lambda: clock['elapsed'])
+    backoffs = []
+    monkeypatch.setattr('app.ai.time.sleep', backoffs.append)
+    article = article_factory()
+    event = event_factory(article)
+    event.assessment = None
+    models = []
+    class Temporary(Exception):
+        pass
+    def transport(prompt, schema, model):
+        models.append(model)
+        if model == 'primary-model':
+            clock['elapsed'] += 60
+            error = Temporary()
+            error.code = code
+            raise error
+        clock['elapsed'] += 1
+        if schema == Assessments:
+            return Assessments(items=[event_factory(article).assessment]).model_dump_json(), 100
+        if schema == Drafts:
+            return Drafts(items=[draft_for(event, article)]).model_dump_json(), 100
+        return json.dumps({'items': [{'event_id': event.id, 'supported': True, 'reason': 'Supported'}]}), 100
+    settings = Settings(gemini_model='primary-model', gemini_fallback_model='fallback-model',
+                        ai_requests=12, ai_tokens=100_000, ai_seconds=240)
+    engine = GeminiEngine(settings, transport)
+    notices = []
+    engine.assess([event], {article.id: article}, notices)
+    assert event.assessment is not None and not notices
+    story = engine.summarize(event, {article.id: article})
+    assert story.status == 'verified-analysis' and not engine.unavailable
+    assert models == ['primary-model'] + ['fallback-model'] * 3 and not backoffs
+    assert engine.assessment_seconds == 61 and engine.requests == 4
+    assert engine.preferred_model == 'fallback-model'
+
+
+def test_preferred_fallback_can_switch_back_if_it_later_fails(monkeypatch):
+    monkeypatch.setattr('app.ai.time.sleep', lambda seconds: None)
+    models = []
+    class Temporary(Exception):
+        code = 503
+    def transport(prompt, schema, model):
+        models.append(model)
+        if len(models) in (1, 3):
+            raise Temporary()
+        return Assessments(items=[]).model_dump_json(), 100
+    engine = GeminiEngine(Settings(gemini_model='primary-model', gemini_fallback_model='fallback-model'), transport)
+    engine.request('assess', [], Assessments)
+    assert engine.preferred_model == 'fallback-model'
+    engine.request('assess', [{'later': True}], Assessments)
+    assert engine.preferred_model == 'primary-model'
+    engine.request('assess', [{'last': True}], Assessments)
+    assert models == ['primary-model', 'fallback-model', 'fallback-model', 'primary-model', 'primary-model']
+    assert engine.requests == 5 and engine.tokens == 300 and not engine.unavailable
+
+
+def test_terminal_fallback_retries_are_bounded_and_later_request_can_recover(monkeypatch):
+    backoffs = []
+    monkeypatch.setattr('app.ai.time.sleep', backoffs.append)
+    models = []
+    class Temporary(Exception):
+        code = 503
+    def transport(prompt, schema, model):
+        models.append(model)
+        if len(models) <= 4:
+            raise Temporary()
+        return Assessments(items=[]).model_dump_json(), 100
+    engine = GeminiEngine(Settings(gemini_model='primary-model', gemini_fallback_model='fallback-model'), transport)
+    with pytest.raises(AIError) as failed:
+        engine.request('assess', [], Assessments)
+    assert failed.value.category == 'transient' and not engine.unavailable
+    assert models == ['primary-model'] + ['fallback-model'] * 3 and len(backoffs) == 2
+    assert engine.request('assess', [{'later': True}], Assessments).items == []
+    assert models[-1] == 'primary-model' and engine.requests == 5 and engine.tokens == 100
 
 
 def test_temporary_outage_does_not_split_batches_or_disable_later_summaries(monkeypatch, article_factory, event_factory):
@@ -374,5 +455,29 @@ def test_real_sdk_sends_json_schema_without_legacy_conversion(schema):
         text, tokens = engine._generate('Return an empty items array.', schema, 'offline-model')
         assert schema.model_validate_json(text).items == [] and tokens == 12
         assert len(captured) == 1
+    finally:
+        engine.close()
+
+
+def test_real_sdk_does_not_retry_inside_counted_engine_attempts(monkeypatch):
+    from google import genai
+    monkeypatch.setattr('app.ai.time.sleep', lambda seconds: None)
+    client_factory = genai.Client
+    http_calls = []
+    def endpoint(request):
+        http_calls.append(1)
+        return httpx.Response(503, json={'error': {'code': 503, 'status': 'UNAVAILABLE', 'message': 'Temporary outage'}})
+    def create_client(*, api_key, http_options):
+        assert http_options.retry_options.attempts == 1 and http_options.timeout == 60_000
+        http_options.client_args = {'transport': httpx.MockTransport(endpoint)}
+        return client_factory(api_key=api_key, http_options=http_options)
+    monkeypatch.setattr(genai, 'Client', create_client)
+    engine = GeminiEngine(Settings(gemini_api_key='offline-placeholder'))
+    try:
+        with pytest.raises(AIError) as failed:
+            engine.request('assess', [], Assessments)
+        assert failed.value.category == 'transient' and not engine.unavailable
+        assert len(http_calls) == engine.requests == engine.assessment_requests == 3
+        assert engine.tokens == engine.assessment_tokens == 0
     finally:
         engine.close()

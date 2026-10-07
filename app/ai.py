@@ -107,6 +107,7 @@ class GeminiEngine:
         self.cache = {}
         self.client = None
         self.transport = transport
+        self.preferred_model = None
         self.unavailable = False
         self.failure_reason = ""
 
@@ -119,7 +120,8 @@ class GeminiEngine:
             key = self.settings.gemini_api_key.get_secret_value()
             if not key:
                 raise AIError("GEMINI_API_KEY unavailable", category="configuration")
-            self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000))
+            self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000,
+                retry_options=types.HttpRetryOptions(attempts=1)))
         from google.genai import types
         response = self.client.models.generate_content(model=model, contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json",
@@ -144,10 +146,15 @@ class GeminiEngine:
         if self.unavailable:
             raise AIError(self.failure_reason or "AI unavailable for this run", category="unavailable")
         reserve = len(prompt) // 2 + 8192
-        models = list(dict.fromkeys(filter(None, [self.settings.gemini_model, self.settings.gemini_fallback_model])))
+        configured_models = list(dict.fromkeys(filter(None, [self.settings.gemini_model, self.settings.gemini_fallback_model])))
+        preferred = self.preferred_model if self.preferred_model in configured_models else None
+        models = list(dict.fromkeys(filter(None, [preferred, *configured_models])))
         transient_reason = ""
         for model in models:
-            for attempt in range(3):
+            # Give a configured alternative a turn before spending retries on
+            # a temporarily unavailable primary. Only the final model retries.
+            attempts = 3 if model == models[-1] else 1
+            for attempt in range(attempts):
                 total_exhausted = (self.requests >= self.settings.ai_requests
                     or self.tokens >= self.settings.ai_tokens
                     or time.monotonic() - self.started >= self.settings.ai_seconds)
@@ -173,6 +180,10 @@ class GeminiEngine:
                         self._account_tokens(tokens - reserve, stage)
                     result = schema.model_validate_json(text)
                     self.cache[key] = result
+                    if self.preferred_model != model:
+                        if self.preferred_model is not None or model != self.settings.gemini_model:
+                            log.info("Gemini model switched for this run: %s", model)
+                        self.preferred_model = model
                     self.failure_reason = ""
                     return result
                 except (ValidationError, ValueError) as exc:
@@ -189,7 +200,7 @@ class GeminiEngine:
                     if rejected_request(exc):
                         self._account_tokens(-reserve, stage)
                     temporary = transient_failure(exc)
-                    if temporary and attempt < 2:
+                    if temporary and attempt < attempts - 1:
                         time.sleep(min(20, 2 ** attempt + random.random()))
                         continue
                     # Never log provider exception text (may include request data/API key).
