@@ -5,7 +5,7 @@ import pytest
 
 from app.ai import AIError, GeminiEngine, provider_failure, same_ids, validate_draft
 from app.config import Settings
-from app.models import Assessments, Claim, CitedNote, Draft, Drafts, Synthesis, Verdicts
+from app.models import Assessments, Claim, CitedNote, Draft, Drafts, Event, Synthesis, Verdicts
 
 
 def test_schema_ids_missing_duplicate_and_unknown(event_factory, article_factory):
@@ -97,7 +97,11 @@ def test_budget_failure_and_auth_failure_do_not_retry_forever(article_factory,ev
     engine = GeminiEngine(Settings(ai_tokens=1000),forbidden)
     notices = []
     engine.assess([event],{a.id:a},notices)
-    assert event.assessment is None and notices and engine.unavailable
+    assert event.assessment is None and notices and not engine.unavailable
+    assert 'assessment allowance exhausted' in notices[0]
+    with pytest.raises(AIError) as exhausted:
+        engine.request('summarize', [], Drafts)
+    assert exhausted.value.category == 'budget' and engine.unavailable
     class AuthenticationError(Exception):
         code = 403
     count = []
@@ -146,7 +150,7 @@ def test_temporary_outage_does_not_split_batches_or_disable_later_summaries(monk
         if schema == Drafts:
             return Drafts(items=[draft_for(events[-1], articles[-1])]).model_dump_json(), 100
         return json.dumps({'items': [{'event_id': events[-1].id, 'supported': True, 'reason': 'Supported'}]}), 100
-    engine = GeminiEngine(Settings(ai_tokens=15_000), transport)
+    engine = GeminiEngine(Settings(ai_tokens=30_000), transport)
     notices = []
     registry = {a.id: a for a in articles}
     engine.assess(events, registry, notices)
@@ -157,6 +161,7 @@ def test_temporary_outage_does_not_split_batches_or_disable_later_summaries(monk
     story = engine.summarize(events[-1], registry)
     assert story.status == 'verified-analysis'
     assert engine.requests == 6 and engine.tokens == 300
+    assert engine.assessment_requests == 4 and engine.assessment_tokens == 100
 
 
 @pytest.mark.parametrize('code', [408, 429, 500, 502, 503, 504, None, 'transport-timeout', 'connection'])
@@ -190,6 +195,7 @@ def test_exhausted_temporary_request_can_recover_later(monkeypatch, code):
     previous_tokens = engine.tokens
     assert engine.request('assess', [{'later': True}], Assessments).items == []
     assert len(calls) == 4 and engine.tokens == previous_tokens + 100
+    assert engine.assessment_tokens == engine.tokens
 
 
 def test_temporary_failures_still_exhaust_global_request_budget(monkeypatch):
@@ -202,12 +208,76 @@ def test_temporary_failures_still_exhaust_global_request_budget(monkeypatch):
         raise Temporary()
     engine = GeminiEngine(Settings(ai_requests=4), transport)
     with pytest.raises(AIError) as temporary:
-        engine.request('assess', [], Assessments)
+        engine.request('summarize', [], Drafts)
     assert temporary.value.category == 'transient' and not engine.unavailable
     with pytest.raises(AIError) as exhausted:
-        engine.request('assess', [{'later': True}], Assessments)
+        engine.request('summarize', [{'later': True}], Drafts)
     assert exhausted.value.category == 'budget' and engine.unavailable
     assert len(calls) == engine.requests == 4 and engine.tokens == 0
+
+
+@pytest.mark.parametrize('resource', ['requests', 'tokens', 'seconds'])
+def test_assessment_allowance_preserves_summary_and_audit_budget(monkeypatch, article_factory, event_factory, resource):
+    clock = {'elapsed': 0.0}
+    monkeypatch.setattr('app.ai.time.monotonic', lambda: clock['elapsed'])
+    articles = [article_factory(i) for i in range(4)]
+    events = [event_factory(a) for a in articles]
+    for event in events:
+        event.assessment = None
+    registry = {a.id: a for a in articles}
+    settings = Settings(ai_requests=5 if resource == 'requests' else 120,
+                        ai_tokens=50_000 if resource == 'tokens' else 400_000,
+                        ai_seconds=100, ai_batch_size=1)
+    calls = []
+    def transport(prompt, schema, model):
+        calls.append(schema)
+        payload = json.loads(prompt.split('DATA:\n', 1)[1])
+        if schema == Assessments:
+            article = registry[payload[0]['articles'][0]['id']]
+            assessment = event_factory(article).assessment
+            if resource == 'seconds':
+                clock['elapsed'] += 61
+            return Assessments(items=[assessment]).model_dump_json(), 12_000 if resource == 'tokens' else 100
+        if schema == Drafts:
+            return Drafts(items=[draft_for(events[0], articles[0])]).model_dump_json(), 100
+        return json.dumps({'items': [{'event_id': events[0].id, 'supported': True, 'reason': 'Supported'}]}), 100
+    engine = GeminiEngine(settings, transport)
+    notices = []
+    engine.assess(events, registry, notices)
+    assessed = sum(event.assessment is not None for event in events)
+    assert assessed == {'requests': 3, 'tokens': 2, 'seconds': 1}[resource]
+    assert engine.assessment_requests == assessed and not engine.unavailable
+    assert len(notices) == 1 and 'budget reserved for summaries and audits' in notices[0]
+    with pytest.raises(AIError) as deferred:
+        engine.assess_batch([events[-1]], registry)
+    assert deferred.value.category == 'assessment-budget' and not deferred.value.splittable
+    story = engine.summarize(events[0], registry)
+    assert story.status == 'verified-analysis' and calls[-2:] == [Drafts, Verdicts]
+    assert engine.requests == assessed + 2 and engine.assessment_requests == assessed
+    assert engine.tokens == engine.assessment_tokens + 200 and not engine.unavailable
+
+
+def test_merged_reassessment_shares_initial_assessment_allowance(article_factory, event_factory):
+    articles = [article_factory(i) for i in range(3)]
+    events = [event_factory(a) for a in articles]
+    for event in events:
+        event.assessment = None
+    registry = {a.id: a for a in articles}
+    calls = []
+    def transport(prompt, schema, model):
+        calls.append(1)
+        payload = json.loads(prompt.split('DATA:\n', 1)[1])
+        article = registry[payload[0]['articles'][0]['id']]
+        return Assessments(items=[event_factory(article).assessment]).model_dump_json(), 100
+    engine = GeminiEngine(Settings(ai_requests=5, ai_batch_size=1), transport)
+    notices = []
+    engine.assess(events, registry, notices)
+    merged = Event(id='merged-event', article_ids=[articles[0].id, articles[1].id])
+    engine.assess([merged], registry, notices)
+    assert all(event.assessment is not None for event in events) and merged.assessment is None
+    assert len(calls) == engine.assessment_requests == engine.requests == 3
+    assert engine.assessment_tokens == engine.tokens == 300 and not engine.unavailable
+    assert len(notices) == 1 and '1 event(s)' in notices[0]
 
 
 def test_missing_key_stops_after_one_attempt_without_reserved_tokens(monkeypatch, article_factory, event_factory):

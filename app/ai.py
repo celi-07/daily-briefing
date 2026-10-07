@@ -100,6 +100,9 @@ class GeminiEngine:
         self.settings = settings
         self.requests = 0
         self.tokens = 0
+        self.assessment_requests = 0
+        self.assessment_tokens = 0
+        self.assessment_seconds = 0.0
         self.started = time.monotonic()
         self.cache = {}
         self.client = None
@@ -127,6 +130,11 @@ class GeminiEngine:
         usage = response.usage_metadata
         return response.text or "", usage.total_token_count if usage else None
 
+    def _account_tokens(self, amount, stage):
+        self.tokens += amount
+        if stage == "assess":
+            self.assessment_tokens += amount
+
     def request(self, stage, payload, schema):
         instructions = (ROOT / "prompts" / f"{stage}.txt").read_text(encoding="utf-8")
         prompt = instructions + "\nOutput language: " + self.settings.language + "\nDATA:\n" + json.dumps(payload, ensure_ascii=False)
@@ -140,17 +148,29 @@ class GeminiEngine:
         transient_reason = ""
         for model in models:
             for attempt in range(3):
-                if (self.requests >= self.settings.ai_requests or self.tokens + reserve > self.settings.ai_tokens
-                        or time.monotonic() - self.started >= self.settings.ai_seconds):
+                total_exhausted = (self.requests >= self.settings.ai_requests
+                    or self.tokens >= self.settings.ai_tokens
+                    or time.monotonic() - self.started >= self.settings.ai_seconds)
+                fraction = self.settings.ai_assessment_fraction
+                if stage == "assess" and not total_exhausted and (
+                        self.assessment_requests >= max(1, int(self.settings.ai_requests * fraction))
+                        or self.assessment_tokens + reserve > self.settings.ai_tokens * fraction
+                        or self.assessment_seconds >= self.settings.ai_seconds * fraction):
+                    self.failure_reason = "AI assessment allowance exhausted; budget reserved for summaries and audits"
+                    raise AIError(self.failure_reason, category="assessment-budget")
+                if total_exhausted or self.tokens + reserve > self.settings.ai_tokens:
                     self.unavailable = True
                     self.failure_reason = "AI request/token/time budget exhausted"
                     raise AIError(self.failure_reason, category="budget")
                 self.requests += 1
-                self.tokens += reserve
+                if stage == "assess":
+                    self.assessment_requests += 1
+                self._account_tokens(reserve, stage)
+                attempt_started = time.monotonic() if stage == "assess" else None
                 try:
                     text, tokens = self._generate(prompt, schema, model)
                     if tokens is not None:
-                        self.tokens += tokens - reserve
+                        self._account_tokens(tokens - reserve, stage)
                     result = schema.model_validate_json(text)
                     self.cache[key] = result
                     self.failure_reason = ""
@@ -160,14 +180,14 @@ class GeminiEngine:
                     raise AIError(self.failure_reason, splittable=True) from exc
                 except AIError as exc:
                     if exc.category == "configuration":
-                        self.tokens -= reserve
+                        self._account_tokens(-reserve, stage)
                         self.unavailable = True
                         self.failure_reason = str(exc)
                     raise
                 except Exception as exc:
                     code = getattr(exc, "code", None)
                     if rejected_request(exc):
-                        self.tokens -= reserve
+                        self._account_tokens(-reserve, stage)
                     temporary = transient_failure(exc)
                     if temporary and attempt < 2:
                         time.sleep(min(20, 2 ** attempt + random.random()))
@@ -182,6 +202,9 @@ class GeminiEngine:
                         self.unavailable = True
                         raise AIError(self.failure_reason, category="provider") from None
                     break
+                finally:
+                    if attempt_started is not None:
+                        self.assessment_seconds += time.monotonic() - attempt_started
         if transient_reason:
             self.failure_reason = transient_reason
             raise AIError(self.failure_reason, category="transient")
@@ -243,6 +266,9 @@ class GeminiEngine:
                 verdicts = self.request("verify", {"events": data, "drafts": [draft.model_dump(mode="json")]}, Verdicts)
                 same_ids(verdicts.items, [event.id])
                 if not verdicts.items[0].supported:
+                    self.failure_reason = "Evidence audit rejected the generated draft"
+                    log.warning("AI summary unavailable for event %s, attempt %d: %s",
+                                event.id, attempt + 1, self.failure_reason)
                     data[0]["repair_reason"] = verdicts.items[0].reason
                     continue
                 cited = sorted({aid for claim in draft.summary for aid in claim.article_ids})
@@ -254,7 +280,11 @@ class GeminiEngine:
                                         published_at=registry[aid].published_at) for aid in cited],
                     importance=event.assessment.scores.total, status="verified-analysis",
                     published_at=max(registry[aid].published_at for aid in event.article_ids))
-            except AIError:
+            except AIError as exc:
+                self.failure_reason = str(exc)
+                log.warning("AI summary unavailable for event %s, attempt %d: %s",
+                            event.id, attempt + 1, self.failure_reason)
+                data[0]["repair_reason"] = self.failure_reason
                 if self.unavailable:
                     break
         return None

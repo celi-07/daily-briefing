@@ -86,6 +86,10 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL }}
+          AI_REQUESTS: ${{ vars.AI_REQUESTS }}
+          AI_TOKENS: ${{ vars.AI_TOKENS }}
+          AI_SECONDS: ${{ vars.AI_SECONDS }}
+          AI_ASSESSMENT_FRACTION: ${{ vars.AI_ASSESSMENT_FRACTION }}
           TIMEZONE: ${{ vars.TIMEZONE || 'Asia/Jakarta' }}
           REQUIRE_REMOTE_CHECKPOINT: 'true'
           RETRY_UNCERTAIN: ${{ inputs.retry_uncertain || 'false' }}

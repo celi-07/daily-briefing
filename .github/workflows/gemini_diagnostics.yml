@@ -7,6 +7,11 @@ on:
         type: choice
         options: [schemas, end-to-end]
         default: schemas
+      model:
+        description: 'Use configured model or test the Flash-Lite alternative'
+        type: choice
+        options: [configured, gemini-3.5-flash-lite]
+        default: configured
 permissions:
   contents: read
 jobs:
@@ -22,7 +27,7 @@ jobs:
       - name: Test Gemini without sending email
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_MODEL: ${{ inputs.model != 'configured' && inputs.model || vars.GEMINI_MODEL }}
           GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL }}
           DIAGNOSTIC_MODE: ${{ inputs.mode || 'schemas' }}
         run: python scripts/diagnose_gemini.py --mode "$DIAGNOSTIC_MODE"
