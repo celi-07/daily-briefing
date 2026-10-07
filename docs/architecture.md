@@ -7,7 +7,7 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
     → dated, normalized Article records + SourceHealth
     → safe article enrichment
     → conservative URL / exact-title / linked-post event clusters
-    → Gemini schema-constrained assessment of every cluster
+    → Gemini schema-constrained cluster assessment within declared budgets
     → precise cross-language event-key merging + reassessment
     → deterministic evidence gate + importance threshold
     → per-event summary → numeric/source-ID guards → evidence audit

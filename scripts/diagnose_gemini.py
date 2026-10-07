@@ -92,8 +92,10 @@ def main():
                     config.response_mime_type = 'application/json'
                     config.response_json_schema = schema.model_json_schema()
                 response = client.models.generate_content(model=settings.gemini_model, contents=prompt, config=config)
+                valid_output = schema.model_validate_json(response.text or '').items == []
+                failed = failed or not valid_output
                 print(json.dumps({'probe': label, 'model': settings.gemini_model, 'status': 'accepted',
-                    'valid_output': schema.model_validate_json(response.text or '').items == []}), flush=True)
+                    'valid_output': valid_output}), flush=True)
             except Exception as exc:
                 failed = True
                 # Print only the provider message, not exception repr/details/headers/prompt.
