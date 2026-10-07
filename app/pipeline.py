@@ -15,7 +15,7 @@ from app.delivery import load_state, prepare_state, send_state, state_path
 from app.enrich import enrich
 from app.http import Fetcher
 from app.market import fetch_market_snapshot
-from app.models import Article, Digest, SourceHealth
+from app.models import Article, Digest, RenderedPart, SourceHealth
 from app.render import render_parts
 from app.selection import select, sort_stories, source_story
 from app.sources import cryptowave, rss, x
@@ -136,7 +136,15 @@ def main(argv=None):
     path = state_path(settings, edition)
     existing = load_state(path) if not preview else None
     if existing:
-        log.info("Restored frozen edition; resuming only unsent parts")
+        restored_digest = Digest.model_validate(existing["digest"])
+        restored_parts = [RenderedPart.model_validate(item["payload"]) for item in existing["parts"]]
+        confirmed = sum(item["status"] == "sent" for item in existing["parts"])
+        verified = sum(story.status == "verified-analysis" for story in restored_digest.stories)
+        log.info("Restored frozen edition generated at %s: %d/%d confirmed parts; %d/%d AI-verified stories. "
+                 "No fresh collection or AI generation; use --dry-run for a fresh preview.",
+                 restored_digest.window_end.isoformat(), confirmed, len(restored_parts),
+                 verified, len(restored_digest.stories))
+        save_outputs(restored_digest, restored_parts, settings.output_dir)
         send_state(settings, path, existing, retry_uncertain=args.retry_uncertain)
         return
     if args.fixture:
