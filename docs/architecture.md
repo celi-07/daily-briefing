@@ -7,7 +7,7 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
     → dated, normalized Article records + SourceHealth
     → safe article enrichment
     → conservative URL / exact-title / linked-post event clusters
-    → Gemini schema-constrained assessment of every cluster
+    → Gemini schema-constrained cluster assessment within declared budgets
     → precise cross-language event-key merging + reassessment
     → deterministic evidence gate + importance threshold
     → per-event summary → numeric/source-ID guards → evidence audit
@@ -44,6 +44,7 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
 - Known qualifying events survive generation failures as source excerpts. Failed assessments are separately labeled unassessed excerpts with no invented score. Unknown social claims are not promoted to confirmed news.
 - Numeric facts and dates must be present in the cited evidence; source URLs come from the registry. Conditional analysis must not invent causation. Connections/watch items require source-backed stories and another audit.
 - Collection/AI budgets are coverage limits, never hidden story caps. Unknown/future dates are quarantined. Syndication detection, cross-language identity and judgment require calibration on actual output.
+- Assessment shares a configurable fraction (default .6) of request/token/time allowances across initial batches, retries and merged-event reassessment. Exhausting this allowance preserves the remaining budget for summaries/audits; overall limits remain authoritative. Explicit provider rejections refund reserved tokens; uncertain remote outcomes keep conservative estimates. Temporary provider failures do not disable later events or trigger recursive batch splitting. Only invalid/truncated responses and evidence-ID errors split assessment batches. A configured fallback receives temporary primary-model failures promptly, with bounded retries on the final model and explicit single-attempt SDK transport settings.
 - Publication times use aware UTC records; presentation uses the configured timezone. Market observations retain their actual dates and comparison periods.
 - Header/footer content is reserved during partitioning; story boundaries remain intact. Huge single-story/header failures are explicit rather than truncated. Browser viewport checks do not replace email-client verification.
 
@@ -54,5 +55,7 @@ The edition key is Jakarta date plus recipient hash; payloads are frozen on prep
 SMTP connects/authenticates, checkpoints `sending`, submits the message, then checkpoints `sent`. A missing acceptance response leaves `uncertain`; interrupted `sending` is also uncertain. Retrying it requires explicit acknowledgement after mailbox inspection. Confirmed parts are never automatically resent. Checkpoint errors stop delivery. This provides conservative recovery, not an exactly-once SMTP guarantee.
 
 The workflow restores only matching-date artifacts from scheduled/manual executions of the delivery workflow on the default branch. PR test artifacts cannot become production delivery state. Recovery freezes news content instead of regenerating different part boundaries during retries. Artifacts are access-controlled by GitHub and retained for seven days; they contain news content and delivery metadata but no credentials.
+
+Restoration logs the frozen window end, confirmed part count and AI-verified story count, and saves the original previews for inspection. Manual `preview_only` skips restoration and calls `--dry-run`, which ignores local delivery state, generates fresh output and never sends email. A separate bounded diagnostic uses one dated BBC RSS article to exercise assessment, generation and audit through the real engine, saving previews without market or delivery access.
 
 The Python runtime remains 3.10. Node 24 is required only for the official artifact SDK in Actions; no service/database/hosting system is introduced. X requires separate API access and configured queries. Gemini Search grounding and a persistent news-history database remain optional future additions, outside this change.

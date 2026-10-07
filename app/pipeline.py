@@ -15,7 +15,7 @@ from app.delivery import load_state, prepare_state, send_state, state_path
 from app.enrich import enrich
 from app.http import Fetcher
 from app.market import fetch_market_snapshot
-from app.models import Article, Digest, SourceHealth
+from app.models import Article, Digest, RenderedPart, SourceHealth
 from app.render import render_parts
 from app.selection import select, sort_stories, source_story
 from app.sources import cryptowave, rss, x
@@ -95,8 +95,11 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         stories = sort_stories(stories)
         eligible_ids = [s.event_id for s in stories if s.importance is not None]
         notes = engine.synthesize(stories, registry)
-        log.info("Events: %d; eligible: %d; excerpts/unassessed: %d; AI requests: %d; tokens: %d",
-                 len(events), len(chosen), sum(s.status != "verified-analysis" for s in stories), engine.requests, engine.tokens)
+        log.info("Events: %d; assessed: %d; eligible: %d; AI-verified: %d; excerpts/unassessed: %d; "
+                 "AI requests: %d; tokens: %d",
+                 len(events), sum(e.assessment is not None for e in events), len(chosen),
+                 sum(s.status == "verified-analysis" for s in stories),
+                 sum(s.status != "verified-analysis" for s in stories), engine.requests, engine.tokens)
         return Digest(edition_date=cutoff.astimezone(ZoneInfo(settings.timezone)).date().isoformat(),
             window_start=start, window_end=cutoff, timezone=settings.timezone, stories=stories,
             quotes=quotes or [], health=health, notices=list(dict.fromkeys(notices)),
@@ -136,7 +139,15 @@ def main(argv=None):
     path = state_path(settings, edition)
     existing = load_state(path) if not preview else None
     if existing:
-        log.info("Restored frozen edition; resuming only unsent parts")
+        restored_digest = Digest.model_validate(existing["digest"])
+        restored_parts = [RenderedPart.model_validate(item["payload"]) for item in existing["parts"]]
+        confirmed = sum(item["status"] == "sent" for item in existing["parts"])
+        verified = sum(story.status == "verified-analysis" for story in restored_digest.stories)
+        log.info("Restored frozen edition generated at %s: %d/%d confirmed parts; %d/%d AI-verified stories. "
+                 "No fresh collection or AI generation; use --dry-run for a fresh preview.",
+                 restored_digest.window_end.isoformat(), confirmed, len(restored_parts),
+                 verified, len(restored_digest.stories))
+        save_outputs(restored_digest, restored_parts, settings.output_dir)
         send_state(settings, path, existing, retry_uncertain=args.retry_uncertain)
         return
     if args.fixture:

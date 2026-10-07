@@ -137,3 +137,105 @@ def test_assessment_failure_is_labeled_unassessed_without_fake_score(article_fac
     result = build_digest(Settings(),{article.id:article},[],NOW,engine=FixtureEngine({}))
     assert result.stories[0].status == 'unassessed'
     assert result.stories[0].importance is None and not result.stories[0].why_it_matters
+
+
+def test_restored_edition_saves_original_preview_without_ai_or_resend(tmp_path, monkeypatch, caplog):
+    import logging
+    settings = settings_for(tmp_path / 'state').model_copy(update={'output_dir': tmp_path / 'outputs'})
+    path, state = prepare_state(settings, digest(), sample_parts())
+    for item in state['parts']:
+        item['status'] = 'sent'
+    path.write_text(json.dumps(state))
+    monkeypatch.setattr('app.pipeline.Settings.from_env', lambda: settings)
+    monkeypatch.setattr('app.pipeline.state_path', lambda *args: path)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Restored delivery must not regenerate or submit confirmed parts')
+    monkeypatch.setattr('app.pipeline.collect', forbidden)
+    monkeypatch.setattr('app.pipeline.GeminiEngine', forbidden)
+    monkeypatch.setattr('app.delivery.smtplib.SMTP_SSL', forbidden)
+    # Exercise the real delivery loop with an injected factory, which must remain unused.
+    monkeypatch.setattr('app.pipeline.send_state', lambda s,p,st,**kw: send_state(s,p,st,forbidden,**kw))
+    with caplog.at_level(logging.INFO):
+        main([])
+    assert 'No fresh collection or AI generation' in caplog.text
+    assert '2/2 confirmed parts' in caplog.text
+    assert (settings.output_dir / 'preview.html').read_text() == sample_parts()[0].html
+    assert load_state(path) == state
+
+
+def test_live_dry_run_ignores_saved_edition_and_never_sends(tmp_path, monkeypatch, article_factory):
+    settings = Settings(output_dir=tmp_path/'outputs', state_dir=tmp_path/'state')
+    saved = tmp_path/'frozen.json'
+    saved.write_text('do not read or change')
+    monkeypatch.setattr('app.pipeline.Settings.from_env', lambda: settings)
+    monkeypatch.setattr('app.pipeline.state_path', lambda *args: saved)
+    article = article_factory()
+    calls = []
+    def collect(*args):
+        calls.append('fresh-collection')
+        return {article.id:article}, []
+    class Fetcher:
+        def __init__(self, *args): pass
+        def close(self): pass
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Preview must not read delivery state or send email')
+    monkeypatch.setattr('app.pipeline.Fetcher', Fetcher)
+    monkeypatch.setattr('app.pipeline.collect', collect)
+    monkeypatch.setattr('app.pipeline.fetch_market_snapshot', lambda *args: [])
+    monkeypatch.setattr('app.pipeline.GeminiEngine', lambda *args: FixtureEngine({}))
+    monkeypatch.setattr('app.pipeline.load_state', forbidden)
+    monkeypatch.setattr('app.pipeline.prepare_state', forbidden)
+    monkeypatch.setattr('app.pipeline.send_state', forbidden)
+    monkeypatch.chdir(tmp_path)
+    main(['--dry-run'])
+    assert calls == ['fresh-collection']
+    assert saved.read_text() == 'do not read or change'
+    assert (settings.output_dir/'digest.json').exists()
+
+
+def test_end_to_end_diagnostic_uses_all_ai_stages_without_smtp(tmp_path, monkeypatch):
+    import importlib.util
+    from email.utils import format_datetime
+    from app.ai import GeminiEngine
+    from app.config import ROOT
+    from app.models import Assessments, Drafts
+    spec = importlib.util.spec_from_file_location('diagnostic_script', ROOT/'scripts'/'diagnose_gemini.py')
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Diagnostic must never submit email or modify delivery state')
+    monkeypatch.setattr('app.delivery.prepare_state', forbidden)
+    monkeypatch.setattr('app.delivery.send_state', forbidden)
+    date = format_datetime(NOW-timedelta(hours=1))
+    feed = (f'<rss version="2.0"><channel><title>Test</title><link>https://example.com</link>'
+            f'<item><title>Company announces a new semiconductor factory</title>'
+            f'<link>https://example.com/news/factory</link><pubDate>{date}</pubDate>'
+            '<description>The company announced a new semiconductor factory.</description>'
+            '</item></channel></rss>').encode()
+    class Fetcher:
+        def get(self, url): return feed, url
+    stages = []
+    def transport(prompt, schema, model):
+        stages.append(schema.__name__)
+        payload = json.loads(prompt.split('DATA:\n',1)[1])
+        event = payload[0] if schema == Assessments else payload['events'][0]
+        eid, aid = event['event_id'], event['articles'][0]['id']
+        if schema == Assessments:
+            response = {'items':[{'event_id':eid,'event_key':'Company factory announcement','topic':'tech',
+                'entities':['Company'],'scores':dict(impact=5,relevance=5,novelty=5,urgency=5),
+                'evidence':'supported','independent_origins':[aid],
+                'facts':[{'text':'The company announced a factory.','article_ids':[aid]}], 'reason':'supported'}]}
+        elif schema == Drafts:
+            response = {'items':[{'event_id':eid,'headline':'Company announces a new factory',
+                'summary':[{'text':'The company announced a new semiconductor factory.','article_ids':[aid]}],
+                'why_it_matters':'The announcement could affect manufacturing.'}]}
+        else:
+            response = {'items':[{'event_id':eid,'supported':True,'reason':'supported'}]}
+        return json.dumps(response), 100
+    settings = Settings(output_dir=tmp_path/'preview', state_dir=tmp_path/'state')
+    engine = GeminiEngine(settings, transport)
+    result = script.end_to_end(settings, fetcher=Fetcher(), engine=engine, cutoff=NOW)
+    assert result['status'] == 'passed' and result['story_status'] == 'verified-analysis'
+    assert stages == ['Assessments', 'Drafts', 'Verdicts']
+    assert not settings.state_dir.exists()
+    assert (settings.output_dir/'preview.html').exists()
