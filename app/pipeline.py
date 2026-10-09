@@ -1,6 +1,8 @@
 import argparse
+import html
 import json
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -8,10 +10,10 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-from app.ai import GeminiEngine
+from app.ai import create_engine
 from app.cluster import cluster_articles, merge_assessed_events
 from app.config import ROOT, Settings
-from app.delivery import load_state, prepare_state, send_state, state_path
+from app.delivery import load_state, prepare_state, send_state, state_path, validate_digest_for_delivery
 from app.enrich import enrich
 from app.http import Fetcher
 from app.market import fetch_market_snapshot
@@ -72,7 +74,7 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         notices.append("Some articles have limited or length-bounded evidence. See source excerpts and original links.")
     events = cluster_articles(list(registry.values()))
     owned_engine = engine is None
-    engine = engine or GeminiEngine(settings)
+    engine = engine or create_engine(settings)
     try:
         engine.assess(events, registry, notices)
         unchanged, merged = merge_assessed_events(events)
@@ -109,16 +111,30 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
             engine.close()
 
 
-def save_outputs(digest, parts, output_dir):
+def save_outputs(digest, parts, output_dir, *, restored=False, offline=False):
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "digest.json").write_text(digest.model_dump_json(indent=2), encoding="utf-8")
     (output_dir / "coverage.json").write_text(json.dumps({"notices": digest.notices,
+        "run": {"fresh_ai_run": not restored and not offline, "restored_edition": restored,
+                "offline_fixture": offline,
+                "generated_at": digest.window_end.isoformat()},
         "ai": ai_coverage(digest),
         "sources": [h.model_dump() for h in digest.health]}, indent=2), encoding="utf-8")
     for part in parts:
         name = "preview" if part.index == 1 else f"preview-{part.index}"
-        (output_dir / f"{name}.html").write_text(part.html, encoding="utf-8")
-        (output_dir / f"{name}.txt").write_text(part.text, encoding="utf-8")
+        preview_html, preview_text = part.html, part.text
+        if restored:
+            note = (f"Saved edition generated at {digest.window_end.isoformat()}. "
+                    "This rerun restored previous content and made no new AI calls. "
+                    "Use preview_only to test the current AI provider with fresh news.")
+            banner = '<p role="status" style="padding:16px;background:#fff3cd;color:#412f00">' + html.escape(note) + '</p>'
+            preview_html, inserted = re.subn(r"(<body\b[^>]*>)", lambda match: match[1] + banner,
+                                            preview_html, count=1, flags=re.IGNORECASE)
+            if not inserted:
+                preview_html = banner + preview_html
+            preview_text = note + "\n\n" + preview_text
+        (output_dir / f"{name}.html").write_text(preview_html, encoding="utf-8")
+        (output_dir / f"{name}.txt").write_text(preview_text, encoding="utf-8")
     log.info("Saved %d email part(s) to %s", len(parts), output_dir.resolve())
 
 
@@ -148,7 +164,7 @@ def main(argv=None):
                  "No fresh collection or AI generation; use --dry-run for a fresh preview.",
                  restored_digest.window_end.isoformat(), confirmed, len(restored_parts),
                  verified, len(restored_digest.stories))
-        save_outputs(restored_digest, restored_parts, settings.output_dir)
+        save_outputs(restored_digest, restored_parts, settings.output_dir, restored=True)
         send_state(settings, path, existing, retry_uncertain=args.retry_uncertain)
         return
     if args.fixture:
@@ -165,6 +181,9 @@ def main(argv=None):
         digest = build_digest(settings, registry, [], cutoff, engine=FixtureEngine(fixture))
         digest.notices.insert(0, "Offline synthetic sample; manually labeled assessments, no live AI/source/email calls.")
     else:
+        # Configuration failures must stop before collection, not become hundreds
+        # of unassessed source excerpts with a successful workflow status.
+        settings.validate_ai()
         fetcher = Fetcher(settings)
         try:
             registry, health = collect(settings, fetcher, cutoff - timedelta(hours=settings.window_hours), cutoff)
@@ -172,7 +191,11 @@ def main(argv=None):
         finally:
             fetcher.close()
     parts = render_parts(digest, settings.html_bytes)
-    save_outputs(digest, parts, settings.output_dir)
+    save_outputs(digest, parts, settings.output_dir, offline=args.fixture is not None)
+    if args.fixture is None:
+        # Live previews are acceptance checks too. Keep diagnostic artifacts on
+        # failure, but never report an incomplete AI run as successful.
+        validate_digest_for_delivery(digest)
     if preview:
         # Preserve the historic preview.html at repository root as well as richer artifacts.
         Path("preview.html").write_text(parts[0].html, encoding="utf-8")

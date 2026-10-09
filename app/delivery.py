@@ -6,7 +6,15 @@ import subprocess
 from email.message import EmailMessage
 from pathlib import Path
 
-from app.models import RenderedPart, stable_id
+from app.models import Digest, RenderedPart, stable_id
+
+
+def validate_digest_for_delivery(digest):
+    unassessed = sum(event.assessment is None for event in digest.decisions)
+    excerpts = sum(story.status != "verified-analysis" for story in digest.stories)
+    if unassessed or excerpts:
+        raise ValueError(f"AI briefing incomplete: {unassessed} unassessed event(s), {excerpts} source excerpt(s). "
+                         "Email withheld; inspect coverage.json and fix the AI connection or budget before retrying.")
 
 
 def checkpoint(path):
@@ -59,6 +67,8 @@ def prepare_state(settings, digest, parts):
 
 
 def send_state(settings, path, state, smtp_factory=smtplib.SMTP_SSL, retry_uncertain=False):
+    if any(item["status"] != "sent" for item in state["parts"]):
+        validate_digest_for_delivery(Digest.model_validate(state["digest"]))
     settings.validate_mail()
     sender = settings.gmail_address
     recipient = settings.recipient_email or sender

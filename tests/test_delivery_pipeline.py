@@ -108,6 +108,8 @@ def test_dry_run_offline_fixture_never_collects_or_sends(tmp_path,monkeypatch,ar
     main(['--fixture',str(fixture),'--dry-run'])
     assert (tmp_path/'preview'/'digest.json').exists()
     assert (tmp_path/'preview'/'preview.txt').exists()
+    report = json.loads((tmp_path/'preview'/'coverage.json').read_text())
+    assert report['run']['offline_fixture'] and not report['run']['fresh_ai_run']
 
 
 def test_mail_credentials_not_required_for_settings_and_model_is_configurable(monkeypatch):
@@ -151,7 +153,7 @@ def test_restored_edition_saves_original_preview_without_ai_or_resend(tmp_path, 
     def forbidden(*args, **kwargs):
         raise AssertionError('Restored delivery must not regenerate or submit confirmed parts')
     monkeypatch.setattr('app.pipeline.collect', forbidden)
-    monkeypatch.setattr('app.pipeline.GeminiEngine', forbidden)
+    monkeypatch.setattr('app.pipeline.create_engine', forbidden)
     monkeypatch.setattr('app.delivery.smtplib.SMTP_SSL', forbidden)
     # Exercise the real delivery loop with an injected factory, which must remain unused.
     monkeypatch.setattr('app.pipeline.send_state', lambda s,p,st,**kw: send_state(s,p,st,forbidden,**kw))
@@ -159,12 +161,15 @@ def test_restored_edition_saves_original_preview_without_ai_or_resend(tmp_path, 
         main([])
     assert 'No fresh collection or AI generation' in caplog.text
     assert '2/2 confirmed parts' in caplog.text
-    assert (settings.output_dir / 'preview.html').read_text() == sample_parts()[0].html
+    preview = (settings.output_dir / 'preview.html').read_text()
+    assert sample_parts()[0].html in preview and 'made no new AI calls' in preview
+    report = json.loads((settings.output_dir / 'coverage.json').read_text())
+    assert report['run']['restored_edition'] and not report['run']['fresh_ai_run']
     assert load_state(path) == state
 
 
 def test_live_dry_run_ignores_saved_edition_and_never_sends(tmp_path, monkeypatch, article_factory):
-    settings = Settings(output_dir=tmp_path/'outputs', state_dir=tmp_path/'state')
+    settings = Settings(openai_api_key='offline-placeholder', output_dir=tmp_path/'outputs', state_dir=tmp_path/'state')
     saved = tmp_path/'frozen.json'
     saved.write_text('do not read or change')
     monkeypatch.setattr('app.pipeline.Settings.from_env', lambda: settings)
@@ -182,12 +187,13 @@ def test_live_dry_run_ignores_saved_edition_and_never_sends(tmp_path, monkeypatc
     monkeypatch.setattr('app.pipeline.Fetcher', Fetcher)
     monkeypatch.setattr('app.pipeline.collect', collect)
     monkeypatch.setattr('app.pipeline.fetch_market_snapshot', lambda *args: [])
-    monkeypatch.setattr('app.pipeline.GeminiEngine', lambda *args: FixtureEngine({}))
+    monkeypatch.setattr('app.pipeline.create_engine', lambda *args: FixtureEngine({}))
     monkeypatch.setattr('app.pipeline.load_state', forbidden)
     monkeypatch.setattr('app.pipeline.prepare_state', forbidden)
     monkeypatch.setattr('app.pipeline.send_state', forbidden)
     monkeypatch.chdir(tmp_path)
-    main(['--dry-run'])
+    with pytest.raises(ValueError, match='AI briefing incomplete'):
+        main(['--dry-run'])
     assert calls == ['fresh-collection']
     assert saved.read_text() == 'do not read or change'
     assert (settings.output_dir/'digest.json').exists()
