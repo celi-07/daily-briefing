@@ -62,7 +62,7 @@ def test_oversized_batch_splits_before_spending_requests(article_factory, event_
         sizes.append(len(payload))
         by_id = {event.id: event_factory(registry[event.article_ids[0]].model_copy(update={'text': 'Evidence.'})).assessment for event in events}
         return Assessments(items=[by_id[item['event_id']] for item in payload]).model_dump_json(), 100
-    engine = GeminiEngine(Settings(ai_tokens=25000), transport)
+    engine = GeminiEngine(Settings(ai_tokens=25000, ai_assessment_fraction=.6), transport)
     notices = []
     engine.assess(events, registry, notices)
     assert sizes == [3, 3]  # Six-item estimate exceeds 15,000; both halves fit.
@@ -122,3 +122,29 @@ def test_summary_provider_failure_is_not_reported_as_failed_evidence(article_fac
     assert digest.stories[0].status == 'source-excerpt'
     assert 'budget exhausted' in digest.stories[0].caveat
     assert ai_coverage(digest)['source_excerpts'] == 1
+
+
+def test_default_split_covers_large_edition_without_raising_total_limits(article_factory, event_factory):
+    articles = [article_factory(i, text='Evidence. ' * 300) for i in range(337)]
+    registry = {article.id: article for article in articles}
+    totals = []
+    for fraction in (.6, Settings().ai_assessment_fraction):
+        events = [event_factory(article.model_copy(update={'text': 'Evidence.'})).model_copy(
+            update={'assessment': None}) for article in articles]
+        def transport(prompt, schema, model):
+            payload = json.loads(prompt.split('DATA:\n', 1)[1])
+            items = []
+            for row in payload:
+                article = registry[row['articles'][0]['id']]
+                item = event_factory(article.model_copy(update={'text': 'Evidence.'})).assessment
+                items.append(item.model_copy(update={'event_id': row['event_id']}))
+            # Approximate observed assessment cost, without claiming live token accuracy.
+            return Assessments(items=items).model_dump_json(), 920 * len(items)
+        settings = Settings(ai_assessment_fraction=fraction)
+        engine = GeminiEngine(settings, transport)
+        engine.assess(events, registry, [])
+        totals.append(sum(event.assessment is not None for event in events))
+        assert not engine.unavailable
+        assert settings.ai_tokens == 400000 and settings.ai_requests == 120 and settings.ai_seconds == 1200
+        assert settings.ai_tokens - engine.tokens >= 80000
+    assert totals[0] < 337 and totals[1] == 337

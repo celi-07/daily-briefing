@@ -308,7 +308,7 @@ def test_assessment_allowance_preserves_summary_and_audit_budget(monkeypatch, ar
     registry = {a.id: a for a in articles}
     settings = Settings(ai_requests=5 if resource == 'requests' else 120,
                         ai_tokens=50_000 if resource == 'tokens' else 400_000,
-                        ai_seconds=100, ai_batch_size=1)
+                        ai_seconds=100, ai_batch_size=1, ai_assessment_fraction=.6)
     calls = []
     def transport(prompt, schema, model):
         calls.append(schema)
@@ -350,7 +350,7 @@ def test_merged_reassessment_shares_initial_assessment_allowance(article_factory
         payload = json.loads(prompt.split('DATA:\n', 1)[1])
         article = registry[payload[0]['articles'][0]['id']]
         return Assessments(items=[event_factory(article).assessment]).model_dump_json(), 100
-    engine = GeminiEngine(Settings(ai_requests=5, ai_batch_size=1), transport)
+    engine = GeminiEngine(Settings(ai_requests=5, ai_batch_size=1, ai_assessment_fraction=.6), transport)
     notices = []
     engine.assess(events, registry, notices)
     merged = Event(id='merged-event', article_ids=[articles[0].id, articles[1].id])

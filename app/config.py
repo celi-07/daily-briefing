@@ -50,7 +50,7 @@ class Settings(Record):
     ai_tokens: int = Field(default=400_000, ge=1000)
     ai_seconds: int = Field(default=1200, ge=1)
     ai_batch_size: int = Field(default=6, ge=1, le=20)
-    ai_assessment_fraction: float = Field(default=.6, ge=.1, le=.9)
+    ai_assessment_fraction: float = Field(default=.8, ge=.1, le=.9)
     assessment_evidence_chars: int = Field(default=3000, ge=1000, le=40_000)
     evidence_chars: int = Field(default=10_000, ge=1000, le=40_000)
     html_bytes: int = Field(default=80 * 1024, ge=12_000)
