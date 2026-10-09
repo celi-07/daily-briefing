@@ -6,7 +6,12 @@ import subprocess
 from email.message import EmailMessage
 from pathlib import Path
 
-from app.models import RenderedPart, stable_id
+from app.models import Digest, RenderedPart, stable_id
+
+
+def validate_digest_for_delivery(digest):
+    if digest.stories and not any(story.status == "verified-analysis" for story in digest.stories):
+        raise ValueError("No verified AI stories available; email withheld. Inspect coverage.json for omitted stories.")
 
 
 def checkpoint(path):
@@ -59,6 +64,13 @@ def prepare_state(settings, digest, parts):
 
 
 def send_state(settings, path, state, smtp_factory=smtplib.SMTP_SSL, retry_uncertain=False):
+    if any(item["status"] != "sent" for item in state["parts"]):
+        digest = Digest.model_validate(state["digest"])
+        validate_digest_for_delivery(digest)
+        # Frozen payloads from the old policy must never send hidden/excerpt stories.
+        verified_ids = {story.event_id for story in digest.stories if story.status == "verified-analysis"}
+        if any(set(item["payload"]["event_ids"]) - verified_ids for item in state["parts"] if item["status"] != "sent"):
+            raise ValueError("Saved email contains omitted AI stories; refusing to send the old payload. Use a fresh preview.")
     settings.validate_mail()
     sender = settings.gmail_address
     recipient = settings.recipient_email or sender

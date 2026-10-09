@@ -86,8 +86,8 @@ def test_failure_reason_and_coverage_survive_save_and_render(tmp_path, article_f
     assert report['assessment_failures'] == {'Gemini authentication or permission failure': 1}
     parts = render_parts(digest)
     for output in (parts[0].html, parts[0].text):
-        assert '0/1 events assessed' in output
-        assert 'Gemini authentication or permission failure' in output
+        assert 'Unassessed source excerpt' not in output
+        assert 'Gemini authentication or permission failure' not in output
         assert 'DO-NOT-LEAK' not in output
     save_outputs(digest, parts, tmp_path)
     assert json.loads((tmp_path / 'coverage.json').read_text())['ai'] == report

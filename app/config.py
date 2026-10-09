@@ -29,6 +29,11 @@ class Source(Record):
 
 
 class Settings(Record):
+    ai_provider: Literal["openai", "gemini"] = "openai"
+    openai_api_key: SecretStr = SecretStr("")
+    openai_model: str = "gpt-5.6-terra"
+    openai_fallback_model: str = ""
+    openai_reasoning_effort: Literal["none", "low", "medium", "high", "xhigh", "max"] = "none"
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_fallback_model: str = ""
@@ -88,3 +93,10 @@ class Settings(Record):
     def validate_mail(self):
         if not self.gmail_address or not self.gmail_app_password.get_secret_value():
             raise ValueError("GMAIL_ADDRESS and GMAIL_APP_PASSWORD are required to send email")
+
+    def validate_ai(self):
+        if self.ai_provider == "openai" and self.gemini_api_key.get_secret_value().strip():
+            return
+        key_name = "OPENAI_API_KEY" if self.ai_provider == "openai" else "GEMINI_API_KEY"
+        if not getattr(self, key_name.lower()).get_secret_value().strip():
+            raise ValueError(f"{key_name} is required for AI_PROVIDER={self.ai_provider}; configure the Actions secret before running")

@@ -19,7 +19,10 @@ def ai_coverage(digest):
                                              if event.assessment is None))}
 
 
-def render_parts(digest, max_bytes=80 * 1024):
+def render_parts(digest, max_bytes=80 * 1024, *, include_excerpts=False):
+    if not include_excerpts:
+        digest = digest.model_copy(update={"stories": [s for s in digest.stories if s.status == "verified-analysis"],
+            "notices": [n for n in digest.notices if not n.startswith(("AI assessment unavailable", "Some qualifying stories were omitted"))]})
     environment = Environment(loader=FileSystemLoader(ROOT / "templates"), undefined=StrictUndefined,
         autoescape=select_autoescape(enabled_extensions=("html.j2",), default_for_string=True),
         trim_blocks=True, lstrip_blocks=True)
@@ -33,8 +36,8 @@ def render_parts(digest, max_bytes=80 * 1024):
         providers = [h for h in digest.health if topic in h.topics and h.status != "disabled"]
         if providers and all(h.status == "failed" for h in providers):
             empty[topic] = "Sources unavailable; news coverage could not be established."
-        elif any(e.assessment is None for e in digest.decisions):
-            empty[topic] = "Analysis incomplete; no confirmed qualifying stories available."
+        elif any(e.assessment is None or e.eligible and e.assessment.topic == topic for e in digest.decisions):
+            empty[topic] = "No verified stories available from the collected evidence."
         else:
             empty[topic] = "No qualifying important stories found in the collected evidence."
     # Keep each topic together, preserving importance order within it.

@@ -1,8 +1,8 @@
 # Daily Morning Briefing
 
-An evidence-backed news digest for global finance, crypto, the Indonesian economy and technology. It collects RSS, Cryptowave articles and optional X posts, assesses importance with Gemini, and delivers a readable HTML **and plain-text** email through Gmail.
+An evidence-backed news digest for global finance, crypto, the Indonesian economy and technology. It collects RSS, Cryptowave articles and optional X posts, assesses importance with OpenAI, and delivers a readable HTML **and plain-text** email through Gmail.
 
-Every qualifying important event is included. There is no five-story cap and no filler on quiet days. Cross-topic duplicates appear once, with their sources retained. When AI or source access fails, the digest reports limited coverage and uses clearly attributed excerpts rather than inventing analysis.
+Every qualifying event with verified AI analysis is included. There is no five-story cap and no filler on quiet days. Cross-topic duplicates appear once, with their sources retained. Failed assessments and summaries are omitted from emails and live previews; JSON diagnostics retain omitted evidence and safe failure reasons. Partial failure does not block verified stories. If collected stories exist but none have verified analysis, email is withheld.
 
 ## Run locally
 
@@ -20,7 +20,12 @@ Put your own credentials in the ignored `.env` file. Never commit them. Rotate a
 
 | Variable | Purpose |
 |---|---|
-| `GEMINI_API_KEY` | Gemini API key; required for AI assessment, optional for labeled source-only fallback |
+| `AI_PROVIDER` | OpenAI preferred by default with Gemini fallback; `gemini` selects Gemini directly |
+| `OPENAI_API_KEY` | Optional Actions secret or local credential; missing key selects available Gemini |
+| `OPENAI_MODEL` | Default `gpt-5.6-terra`; uses the Responses API with strict JSON output |
+| `OPENAI_REASONING_EFFORT` | Default `none` to keep structured screening within the output/time budget |
+| `OPENAI_FALLBACK_MODEL` | Optional alternative OpenAI model; exhausted quota skips further OpenAI attempts |
+| `GEMINI_API_KEY` | Used when OpenAI is missing, unavailable or exhausted, or Gemini is explicitly selected |
 | `GEMINI_MODEL` | Configurable model; default `gemini-3.5-flash-lite` (verify availability for your account) |
 | `GEMINI_FALLBACK_MODEL` | Optional alternative model if the primary model fails |
 | `GMAIL_ADDRESS` | Gmail sender; required for actual delivery |
@@ -29,12 +34,12 @@ Put your own credentials in the ignored `.env` file. Never commit them. Rotate a
 | `X_BEARER_TOKEN` | Optional separate X API credential; requires account access/credits and source queries |
 
 ```sh
-python briefing.py --dry-run     # Live collection and optional Gemini, no SMTP connection
+python briefing.py --dry-run     # Fresh collection and configured AI, no SMTP connection
 python briefing.py --preview     # Same, then open the HTML preview
 python briefing.py              # Generate and send; resumes a frozen edition if already prepared
 ```
 
-Outputs: `artifacts/digest.json`, `coverage.json`, `preview.html`, `preview.txt`, and numbered additional parts. The first HTML preview is also saved to the historic root `preview.html`. Dry-run/preview requires no Gmail credentials. Live previews may consume Gemini/X quota; use the offline fixture for zero network requests:
+Outputs: `artifacts/digest.json`, `coverage.json`, `preview.html`, `preview.txt`, and numbered additional parts. The first complete HTML preview is also saved to the historic root `preview.html`. Dry-run/preview requires no Gmail credentials, but fresh live generation requires the selected AI provider's key. Live previews may consume OpenAI/Gemini/X quota; use the offline fixture for zero network requests:
 
 ```sh
 python briefing.py --fixture tests/fixtures/sample-digest.json --dry-run
@@ -56,13 +61,13 @@ Full-text enrichment retrieves permitted article pages and retains labeled feed 
 
 The pipeline normalizes and clusters evidence, then assesses every collected event in bounded batches. Precise English event identities allow Indonesian/English copies to merge; merged evidence is reassessed. Fixed top-N context slices and category-embedding ranking have been removed.
 
-Gemini produces schema-constrained records, with Python validation for IDs, source membership and numeric claims. Each eligible summary receives a separate evidence audit, including the headline and interpretation. Failed drafts are retried once per event, then replaced by source excerpts. Optional connections/watch items are generated only from verified summaries, cite supporting stories and receive their own evidence audit. Unsupported future dates and generic forecasts are omitted. No model-generated HTML or URLs are accepted.
+The selected AI provider produces schema-constrained records with local ID, numeric and source validation. OpenAI uses Responses with strict JSON output and store=false. Each eligible summary receives a separate evidence audit. Failed drafts are retried once per event, then retained only in JSON diagnostics. OpenAI/Gemini failover shares one request/token/time allowance and cache: switching providers never resets total caps. Optional connections/watch items require verified stories and another evidence audit. No model-generated HTML or URLs are accepted.
 
 The initial importance rubric is impact 40%, relevance 25%, novelty 20%, urgency 15%; each component is 0–5, converted to 0–100. The default threshold is **70**. This is an editorial score, not a probability. Evidence eligibility is separate: credible reporting or a configured primary source's own statement with adequate text; disputed/high-risk third-party claims need independent corroboration. Calibrate the threshold against actual editorial preferences.
 
-All qualifying stories are sorted by importance and recency without a count limit. Failed assessments become **unassessed source excerpts with no invented score**, rather than silently disappearing or being labeled important. Coverage applies to collected evidence, not the entire internet. AI verification reduces unsupported output but is not a guarantee that every publisher claim is true.
+Verified stories are sorted by importance and recency without a count limit. Failed assessments remain unassessed source excerpts with no invented score in JSON diagnostics and are hidden from reader output. Coverage applies to collected evidence, not the entire internet. Evidence checking is not a guarantee that every publisher claim is true.
 
-Useful `.env` settings (defaults in `.env.example`): `IMPORTANCE_THRESHOLD`, `WINDOW_HOURS`, `TIMEZONE`, `LANGUAGE`, `ENRICHMENT`, `HTTP_REQUESTS`, `HTTP_TIMEOUT`, `SOURCE_PAGES`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS`, `AI_BATCH_SIZE`, `AI_ASSESSMENT_FRACTION`, `ASSESSMENT_EVIDENCE_CHARS`, `EVIDENCE_CHARS`, `HTML_BYTES`. Assessment receives 80% of the shared request/token/time allowances by default, including retries and merged-event reassessment; the remaining budget can generate summaries and audits. Checks run before each attempt, so an in-flight call can overrun a time allowance or token estimate. Unassessed events retain explicit coverage notices and excerpts. Overall limits still apply; this reservation does not guarantee every event receives AI analysis.
+Useful `.env` settings (defaults in `.env.example`): `IMPORTANCE_THRESHOLD`, `WINDOW_HOURS`, `TIMEZONE`, `LANGUAGE`, `ENRICHMENT`, `HTTP_REQUESTS`, `HTTP_TIMEOUT`, `SOURCE_PAGES`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS`, `AI_BATCH_SIZE`, `AI_ASSESSMENT_FRACTION`, `ASSESSMENT_EVIDENCE_CHARS`, `EVIDENCE_CHARS`, `HTML_BYTES`. Assessment receives 80% of the shared request/token/time allowances by default, including retries and merged-event reassessment; the remaining budget can generate summaries and audits. Checks run before each attempt, so an in-flight call can overrun a time allowance or token estimate. Unassessed events retain explicit coverage notices and excerpts in JSON diagnostics only. Overall limits still apply; this reservation does not guarantee every event receives AI analysis.
 
 ## Email and delivery
 
@@ -76,9 +81,9 @@ SMTP cannot promise exactly-once delivery. If a connection is lost during messag
 
 ## GitHub Actions
 
-Add the existing credential names as repository Actions secrets, plus optional `X_BEARER_TOKEN`. `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `TIMEZONE`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS` and `AI_ASSESSMENT_FRACTION` can be repository variables. The delivery workflow defaults to the previously live-verified `gemini-3.5-flash-lite` with `gemini-3.8-flash` as fallback (an explicit 3.8 primary keeps Flash-Lite as its default fallback); local runs use the fallback configured in `.env`. With a distinct fallback configured, a temporary primary-model failure moves directly to it; the final model gets at most three attempts with backoff. Temporary failures affect that request and allow later events to recover. Authentication, configuration and overall budget failures stop AI for the run. Keep tokens out of source configuration.
+Configure either OPENAI_API_KEY or GEMINI_API_KEY as repository Actions secrets along with Gmail credentials. The workflow prefers OpenAI and gpt-5.6-terra. Missing OpenAI credentials select Gemini directly. With both keys present, OpenAI quota/rate limits (HTTP 429), invalid credentials or an unavailable model hand the same request to Gemini and disable OpenAI for the remaining run. Other failures try configured alternatives with bounded retries. Model, reasoning and budget settings remain repository variables. Both providers share the unchanged total job budget. Set AI_PROVIDER=gemini to select Gemini directly.
 
-The latest repository schedule is preserved: **00:45 UTC / 07:45 WIB daily**. GitHub scheduling and generation can delay arrival; no promise of delivery before 08:00 is made. Manually run **Daily Morning Briefing** on the default branch to deliver. To check fresh live output, enable its `preview_only` input and download the `briefing-preview-*` artifact. This skips checkpoint restoration, generates new HTML/text/JSON, and sends no email. A normal same-day rerun restores frozen content, logs its original generation time and verified-story count, and resumes only unsent parts. Its success is not evidence that new AI calls succeeded. Keep saved delivery state intact. The separate **Tests** workflow on pull requests performs offline checks and saves synthetic previews without sending email or consuming AI quota.
+The schedule remains 00:45 UTC / 07:45 WIB daily. Use Daily Morning Briefing with preview_only=true for fresh no-email output. HTML/text show only verified stories; digest.json and coverage.json retain full diagnostics. A preview may succeed with partial coverage: inspect JSON counts, not just workflow success. Same-day reruns preserve frozen delivery state and skip confirmed parts. Pending old payloads containing failed-analysis stories cannot be sent. Restored previews are filtered without changing frozen payloads and carry a saved-edition banner with fresh_ai_run=false. Keep saved state intact. The Tests workflow runs offline checks and synthetic previews without sending email or consuming AI quota.
 
 The artifact checkpoint SDK requires Node 24, provisioned by the workflow; ordinary local usage remains Python-only. Artifact runtime credentials are masked and exported only within the delivery job. Production checkpoints require GitHub-hosted Actions; a normal local run uses `.state/` without remote artifact uploading.
 
@@ -105,6 +110,6 @@ The October 7 full-preview report recorded 263 assessed events out of 365, with 
 
 Assessment now uses at most `ASSESSMENT_EVIDENCE_CHARS=3000` characters per article, bounded by `EVIDENCE_CHARS`. The truncation flag is supplied to the model, and short evidence cannot justify invented facts. Eligible summaries and their evidence audits still receive up to `EVIDENCE_CHARS=10000` characters per article. Facts/reasons are concise to reduce output costs. Batches that do not fit the remaining token allowance split before a provider call; smaller batches also have smaller output caps and matching reservations (2,048 for one event, up to 8,192 for large batches); request/time limits and the summary/audit reservation remain enforced. No model switch or higher paid quota is required to benefit from the reduced assessment input. This does not guarantee complete coverage on every source volume or provider outage.
 
-Every email part now reports assessed/total events, verified stories, summary fallbacks and unassessed events. Each unassessed excerpt carries its actual safe failure reason; `coverage.json` includes machine-readable AI counts and grouped failures. These are distinct from below-threshold stories, which are assessed and intentionally excluded. Inspect a fresh `preview_only` run after merging, and check existing repository variables if they override the model defaults.
+Every email part shows the verified-story count. Failed AI stories and per-story failure messages are omitted. Full assessment counts, source excerpts and grouped failures remain in coverage.json and digest.json for diagnostics.
 
-ChatGPT account use is not enabled by being signed into Codex. [Sign in with ChatGPT](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt) requires a separate app registration/sign-in and granted plan-usage scope; this GitHub Actions job has no such connection. The code does not reuse desktop session tokens. This change repairs the existing Gemini integration rather than claiming an unconfigured ChatGPT fallback is active.
+The scheduled job now uses OpenAI through an explicitly configured API key. A ChatGPT login in Codex is not an API credential for this repository. [Sign in with ChatGPT](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt) is a separate app integration with its own registration, sign-in and plan-usage permission; this GitHub Actions job has no such connection. This implementation does not reuse desktop session tokens or claim that API billing is included in the ChatGPT subscription. See the [official OpenAI structured-output guide](https://developers.openai.com/api/docs/guides/structured-outputs) and [configured model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-terra).

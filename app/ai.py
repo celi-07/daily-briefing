@@ -16,13 +16,16 @@ log = logging.getLogger(__name__)
 
 
 class AIError(RuntimeError):
-    def __init__(self, message, *, category="validation", splittable=False):
+    def __init__(self, message, *, category="validation", splittable=False, tokens=None):
         super().__init__(message)
         self.category = category
         self.splittable = splittable
+        self.tokens = tokens
 
 
 def transient_failure(exc):
+    if getattr(exc, "terminal", False):
+        return False
     code = getattr(exc, "code", None)
     return (code in (408, 429) or isinstance(code, int) and 500 <= code < 600
             or isinstance(exc, (TimeoutError, ConnectionError, httpx.TransportError)))
@@ -35,29 +38,31 @@ def rejected_request(exc):
     return isinstance(code, int) and 400 <= code < 600 and code not in (408, 504)
 
 
-def provider_failure(exc):
+def provider_failure(exc, provider="Gemini"):
     """Classify provider errors without logging raw requests, details, or secrets."""
     code = getattr(exc, "code", None)
     message = str(getattr(exc, "message", "") or "").lower()
     if re.search(r"api key (?:is )?(?:not valid|invalid|expired)|invalid api key", message):
-        return "Gemini API key invalid or expired; replace GEMINI_API_KEY"
+        return f"{provider} API key invalid or expired; replace {provider.upper()}_API_KEY"
     if "api key" in message and any(word in message for word in ("blocked", "leaked")):
-        return "Gemini API key blocked; replace GEMINI_API_KEY"
+        return f"{provider} API key blocked; replace {provider.upper()}_API_KEY"
     if code in (401, 403):
-        return "Gemini authentication or permission failure"
+        return f"{provider} authentication or permission failure"
     if code == 404:
-        return "Configured Gemini model or endpoint unavailable"
+        return f"Configured {provider} model or endpoint unavailable"
     if code == 429:
-        return "Gemini quota or rate limit exhausted"
+        return f"{provider} quota or rate limit exhausted"
     if code == 400 and any(word in message for word in ("schema", "generation_config", "generationconfig")):
-        return "Gemini rejected the structured-output schema or generation configuration (HTTP 400)"
+        return f"{provider} rejected the structured-output schema or generation configuration (HTTP 400)"
     if code == 400:
-        return "Gemini rejected the request (HTTP 400); run Gemini Diagnostics for the provider reason"
+        return ("Gemini rejected the request (HTTP 400); run Gemini Diagnostics for the provider reason"
+                if provider == "Gemini" else f"{provider} rejected the request (HTTP 400); check model/configuration compatibility")
     if code in (408, 504) or isinstance(exc, (TimeoutError, httpx.TimeoutException)):
-        return "Gemini request timed out"
+        return f"{provider} request timed out"
     if code in (500, 502, 503):
-        return "Gemini service temporarily unavailable"
-    return "Gemini request failed; run Gemini Diagnostics for details"
+        return f"{provider} service temporarily unavailable"
+    return ("Gemini request failed; run Gemini Diagnostics for details" if provider == "Gemini"
+            else f"{provider} request failed")
 
 
 def same_ids(items, expected):
@@ -95,7 +100,10 @@ def validate_draft(draft, event, registry):
         raise AIError("Headline/analysis introduces unsupported numeric values")
 
 
-class GeminiEngine:
+class StructuredEngine:
+    provider = "AI"
+    model_field = ""
+
     def __init__(self, settings, transport=None):
         self.settings = settings
         self.requests = 0
@@ -112,25 +120,24 @@ class GeminiEngine:
         self.failure_reason = ""
 
     def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
-        if self.transport:
-            return self.transport(prompt, schema, model)
-        if self.client is None:
-            from google import genai
-            from google.genai import types
-            key = self.settings.gemini_api_key.get_secret_value()
-            if not key:
-                raise AIError("GEMINI_API_KEY unavailable", category="configuration")
-            self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000,
-                retry_options=types.HttpRetryOptions(attempts=1)))
-        from google.genai import types
-        response = self.client.models.generate_content(model=model, contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json",
-                response_json_schema=schema.model_json_schema(), temperature=.2, max_output_tokens=max_output_tokens,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)))
-        if response.candidates and str(response.candidates[0].finish_reason).endswith("MAX_TOKENS"):
-            raise AIError("AI output truncated", splittable=True)
-        usage = response.usage_metadata
-        return response.text or "", usage.total_token_count if usage else None
+        raise NotImplementedError
+
+    @property
+    def primary_model(self):
+        return getattr(self.settings, self.model_field)
+
+    def configured_models(self):
+        return list(dict.fromkeys(filter(None, [self.primary_model,
+            getattr(self.settings, self.model_field.replace("_model", "_fallback_model"))])))
+
+    def provider_for_model(self, model):
+        return self.provider
+
+    def model_enabled(self, model):
+        return True
+
+    def provider_handoff(self, model, exc):
+        return False
 
     def _account_tokens(self, amount, stage):
         self.tokens += amount
@@ -140,7 +147,7 @@ class GeminiEngine:
     def request(self, stage, payload, schema):
         instructions = (ROOT / "prompts" / f"{stage}.txt").read_text(encoding="utf-8")
         prompt = instructions + "\nOutput language: " + self.settings.language + "\nDATA:\n" + json.dumps(payload, ensure_ascii=False)
-        key = sha256((stage + self.settings.gemini_model + prompt).encode()).hexdigest()
+        key = sha256((stage + self.provider + self.primary_model + prompt).encode()).hexdigest()
         if key in self.cache:
             return self.cache[key]
         if self.unavailable:
@@ -149,11 +156,13 @@ class GeminiEngine:
         # batch. Scale both the actual provider cap and its budget reservation.
         output_limit = min(8192, 1024 * (len(payload) + 1)) if stage == "assess" and isinstance(payload, list) else 8192
         reserve = len(prompt) // 2 + output_limit
-        configured_models = list(dict.fromkeys(filter(None, [self.settings.gemini_model, self.settings.gemini_fallback_model])))
+        configured_models = self.configured_models()
         preferred = self.preferred_model if self.preferred_model in configured_models else None
         models = list(dict.fromkeys(filter(None, [preferred, *configured_models])))
         transient_reason = ""
         for model in models:
+            if not self.model_enabled(model):
+                continue
             # Give a configured alternative a turn before spending retries on
             # a temporarily unavailable primary. Only the final model retries.
             attempts = 3 if model == models[-1] else 1
@@ -191,8 +200,8 @@ class GeminiEngine:
                     result = schema.model_validate_json(text)
                     self.cache[key] = result
                     if self.preferred_model != model:
-                        if self.preferred_model is not None or model != self.settings.gemini_model:
-                            log.info("Gemini model switched for this run: %s", model)
+                        if self.preferred_model is not None or model != self.primary_model:
+                            log.info("%s model switched for this run: %s", self.provider, model)
                         self.preferred_model = model
                     self.failure_reason = ""
                     return result
@@ -200,6 +209,8 @@ class GeminiEngine:
                     self.failure_reason = "Invalid structured AI response"
                     raise AIError(self.failure_reason, splittable=True) from exc
                 except AIError as exc:
+                    if exc.tokens is not None:
+                        self._account_tokens(exc.tokens - reserve, stage)
                     if exc.category == "configuration":
                         self._account_tokens(-reserve, stage)
                         self.unavailable = True
@@ -209,17 +220,19 @@ class GeminiEngine:
                     code = getattr(exc, "code", None)
                     if rejected_request(exc):
                         self._account_tokens(-reserve, stage)
+                    handoff = self.provider_handoff(model, exc)
                     temporary = transient_failure(exc)
-                    if temporary and attempt < attempts - 1:
+                    if temporary and not handoff and attempt < attempts - 1:
                         time.sleep(min(20, 2 ** attempt + random.random()))
                         continue
                     # Never log provider exception text (may include request data/API key).
-                    self.failure_reason = provider_failure(exc)
-                    log.warning("Gemini request failed (%s, status %s): %s", type(exc).__name__,
+                    provider = self.provider_for_model(model)
+                    self.failure_reason = provider_failure(exc, provider)
+                    log.warning("%s request failed (%s, status %s): %s", provider, type(exc).__name__,
                                 code or "unknown", self.failure_reason)
                     if temporary:
                         transient_reason = self.failure_reason
-                    if code in (401, 403):
+                    if code in (401, 403) and not handoff:
                         self.unavailable = True
                         raise AIError(self.failure_reason, category="provider") from None
                     break
@@ -230,7 +243,7 @@ class GeminiEngine:
             self.failure_reason = transient_reason
             raise AIError(self.failure_reason, category="transient")
         self.unavailable = True
-        raise AIError(self.failure_reason or "Configured Gemini models unavailable", category="provider")
+        raise AIError(self.failure_reason or f"Configured {self.provider} models unavailable", category="provider")
 
     def evidence(self, events, registry, *, assessment=False):
         data = []
@@ -347,3 +360,148 @@ class GeminiEngine:
     def close(self):
         if self.client:
             self.client.close()
+
+
+class GeminiEngine(StructuredEngine):
+    provider = "Gemini"
+    model_field = "gemini_model"
+
+    def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
+        if self.transport:
+            return self.transport(prompt, schema, model)
+        if self.client is None:
+            from google import genai
+            from google.genai import types
+            key = self.settings.gemini_api_key.get_secret_value()
+            if not key:
+                raise AIError("GEMINI_API_KEY unavailable", category="configuration")
+            self.client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000,
+                retry_options=types.HttpRetryOptions(attempts=1)))
+        from google.genai import types
+        response = self.client.models.generate_content(model=model, contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json",
+                response_json_schema=schema.model_json_schema(), temperature=.2, max_output_tokens=max_output_tokens,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)))
+        if response.candidates and str(response.candidates[0].finish_reason).endswith("MAX_TOKENS"):
+            raise AIError("AI output truncated", splittable=True)
+        usage = response.usage_metadata
+        return response.text or "", usage.total_token_count if usage else None
+
+
+def openai_schema(schema):
+    """Require every property (including Pydantic defaults) in OpenAI strict mode."""
+    def strict(node):
+        if isinstance(node, dict):
+            result = {key: strict(value) for key, value in node.items() if key != "default"}
+            if result.get("type") == "object":
+                result["required"] = list(result.get("properties", {}))
+                result["additionalProperties"] = False
+            return result
+        if isinstance(node, list):
+            return [strict(value) for value in node]
+        return node
+    return strict(schema.model_json_schema())
+
+
+class ProviderHTTPError(Exception):
+    def __init__(self, code, *, terminal=False):
+        # Do not retain raw provider response bodies, prompts or authorization headers.
+        super().__init__(f"Provider HTTP {code}")
+        self.code = code
+        self.terminal = terminal
+
+
+class OpenAIEngine(StructuredEngine):
+    provider = "OpenAI"
+    model_field = "openai_model"
+
+    def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
+        if self.transport:
+            return self.transport(prompt, schema, model)
+        key = self.settings.openai_api_key.get_secret_value().strip()
+        if not key:
+            raise AIError("OPENAI_API_KEY unavailable", category="configuration")
+        if self.client is None:
+            self.client = httpx.Client(timeout=httpx.Timeout(60, connect=15))
+        response = self.client.post("https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {key}"}, json={
+                "model": model, "input": prompt, "store": False,
+                "reasoning": {"effort": self.settings.openai_reasoning_effort},
+                "max_output_tokens": max_output_tokens,
+                "text": {"format": {"type": "json_schema", "name": schema.__name__,
+                    "strict": True, "schema": openai_schema(schema)}}})
+        if response.status_code >= 400:
+            terminal = False
+            if response.status_code == 429:
+                try:
+                    terminal = response.json().get("error", {}).get("code") in (
+                        "insufficient_quota", "billing_hard_limit_reached")
+                except (ValueError, AttributeError):
+                    pass
+            raise ProviderHTTPError(response.status_code, terminal=terminal)
+        body = response.json()
+        tokens = (body.get("usage") or {}).get("total_tokens")
+        if body.get("status") == "incomplete":
+            truncated = (body.get("incomplete_details") or {}).get("reason") == "max_output_tokens"
+            raise AIError("OpenAI output truncated" if truncated else "OpenAI response incomplete",
+                          splittable=truncated, tokens=tokens)
+        if body.get("status") != "completed":
+            raise AIError("OpenAI response did not complete", category="provider", tokens=tokens)
+        contents = [content for item in body.get("output", []) if item.get("type") == "message"
+                    for content in item.get("content", [])]
+        if any(content.get("type") == "refusal" for content in contents):
+            raise AIError("OpenAI declined this request", category="refusal", tokens=tokens)
+        text = "".join(content.get("text", "") for content in contents if content.get("type") == "output_text")
+        return text, tokens
+
+
+class FailoverEngine(StructuredEngine):
+    """Route providers within one request/token/time budget, without resetting it."""
+    provider = "OpenAI/Gemini"
+
+    def __init__(self, settings, transport=None):
+        super().__init__(settings, transport)
+        self.adapters = {"openai": OpenAIEngine(settings, transport), "gemini": GeminiEngine(settings, transport)}
+        self.openai_disabled = False
+
+    @property
+    def primary_model(self):
+        return "openai:" + self.settings.openai_model
+
+    def configured_models(self):
+        return [provider + ":" + model for provider, adapter in self.adapters.items()
+                for model in adapter.configured_models() if self.model_enabled(provider + ":" + model)]
+
+    def provider_for_model(self, model):
+        return self.adapters[model.split(":", 1)[0]].provider
+
+    def model_enabled(self, model):
+        return not (self.openai_disabled and model.startswith("openai:"))
+
+    def provider_handoff(self, model, exc):
+        if model.startswith("openai:") and getattr(exc, "code", None) in (401, 403, 404, 429):
+            self.openai_disabled = True
+            log.info("OpenAI connection/quota unavailable; using Gemini for remaining requests")
+            return True
+        return False
+
+    def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
+        provider, name = model.split(":", 1)
+        return self.adapters[provider]._generate(prompt, schema, name, max_output_tokens=max_output_tokens)
+
+    def close(self):
+        for adapter in self.adapters.values():
+            adapter.close()
+
+
+def create_engine(settings, transport=None):
+    openai_key = bool(settings.openai_api_key.get_secret_value().strip())
+    gemini_key = bool(settings.gemini_api_key.get_secret_value().strip())
+    if settings.ai_provider == "gemini" or not openai_key and gemini_key:
+        engine = GeminiEngine(settings, transport)
+    elif openai_key and gemini_key:
+        engine = FailoverEngine(settings, transport)
+    else:
+        engine = OpenAIEngine(settings, transport)
+    log.info("AI provider: %s; model: %s", engine.provider, engine.primary_model)
+    return engine

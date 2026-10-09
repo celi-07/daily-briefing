@@ -23,7 +23,7 @@ def test_every_qualifying_story_in_each_topic(count, article_factory, event_fact
     stories = sort_stories([source_story(event, registry) for event in chosen])
     digest = Digest(edition_date="2026-10-06", window_start=NOW-timedelta(days=1), window_end=NOW,
                     timezone="Asia/Jakarta", stories=stories, decisions=events)
-    parts = render_parts(digest, 18_000)
+    parts = render_parts(digest, 18_000, include_excerpts=True)
     assert Counter(s.topic for s in stories) == Counter({t: count for t in TOPICS}) if count else not stories
     expected = {s.event_id for s in stories}
     assert {eid for p in parts for eid in p.event_ids} == expected
@@ -85,7 +85,7 @@ def test_html_and_attribute_escaping(article_factory, event_factory):
     event = event_factory(article)
     digest = Digest(edition_date="2026-10-06", window_start=NOW-timedelta(days=1), window_end=NOW,
         timezone="Asia/Jakarta", stories=[source_story(event, {article.id:article})])
-    html = render_parts(digest)[0].html
+    html = render_parts(digest, include_excerpts=True)[0].html
     soup = BeautifulSoup(html, "html.parser")
     assert not soup.find("script") and not soup.find("img")
     assert all(not tag.has_attr("onclick") for tag in soup.find_all())
@@ -122,7 +122,7 @@ def test_last_part_notes_reserve_space_and_sources(article_factory,event_factory
     note = CitedNote(kind='connection',text='Conditional connection. '*20,story_ids=[stories[0].event_id,stories[1].event_id])
     digest = Digest(edition_date='2026-10-06',window_start=NOW-timedelta(days=1),window_end=NOW,
                     timezone='Asia/Jakarta',stories=stories,notes=[note])
-    parts = render_parts(digest,18_000)
+    parts = render_parts(digest,18_000, include_excerpts=True)
     assert len(parts) > 1
     assert sum(note.text in p.html for p in parts) == 1
     assert all(len(p.html.encode()) <= 18_000 for p in parts)
