@@ -148,3 +148,27 @@ def test_default_split_covers_large_edition_without_raising_total_limits(article
         assert settings.ai_tokens == 400000 and settings.ai_requests == 120 and settings.ai_seconds == 1200
         assert settings.ai_tokens - engine.tokens >= 80000
     assert totals[0] < 337 and totals[1] == 337
+
+
+def test_small_remaining_assessment_uses_matching_sdk_output_cap():
+    import httpx
+    from google import genai
+    from google.genai import types
+    captured = []
+    def endpoint(request):
+        payload = json.loads(request.content)
+        captured.append(payload['generationConfig']['maxOutputTokens'])
+        return httpx.Response(200, json={'candidates': [{'content': {'role': 'model',
+            'parts': [{'text': '{"items":[]}'}]}, 'finishReason': 'STOP'}],
+            'usageMetadata': {'totalTokenCount': 100}})
+    engine = GeminiEngine(Settings(ai_tokens=12000))
+    engine.tokens = engine.assessment_tokens = 5000
+    engine.client = genai.Client(api_key='offline-placeholder', http_options=types.HttpOptions(
+        client_args={'transport': httpx.MockTransport(endpoint)}))
+    try:
+        assert engine.request('assess', [{'event_id': 'offline', 'articles': []}], Assessments).items == []
+        assert captured == [2048]
+        assert engine.tokens == engine.assessment_tokens == 5100
+        assert not engine.unavailable
+    finally:
+        engine.close()

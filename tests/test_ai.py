@@ -318,7 +318,7 @@ def test_assessment_allowance_preserves_summary_and_audit_budget(monkeypatch, ar
             assessment = event_factory(article).assessment
             if resource == 'seconds':
                 clock['elapsed'] += 61
-            return Assessments(items=[assessment]).model_dump_json(), 12_000 if resource == 'tokens' else 100
+            return Assessments(items=[assessment]).model_dump_json(), 14_000 if resource == 'tokens' else 100
         if schema == Drafts:
             return Drafts(items=[draft_for(events[0], articles[0])]).model_dump_json(), 100
         return json.dumps({'items': [{'event_id': events[0].id, 'supported': True, 'reason': 'Supported'}]}), 100
