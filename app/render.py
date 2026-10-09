@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from app.config import ROOT
-from app.models import LABELS, TOPICS, RenderedPart
+from app.models import BRIEFING_SECTIONS, SECTION_LABELS, LABELS, RenderedPart
 
 STATUS = {"verified-analysis": "Evidence-checked analysis", "source-excerpt": "Source excerpt", "unassessed": "Unassessed source excerpt"}
 
@@ -15,6 +15,10 @@ def ai_coverage(digest):
         "unassessed": len(digest.decisions) - assessed,
         "verified_stories": sum(story.status == "verified-analysis" for story in digest.stories),
         "source_excerpts": sum(story.status == "source-excerpt" for story in digest.stories),
+        "qualifying_events": sum(event.eligible for event in digest.decisions),
+        "selection_decisions": dict(Counter(event.decision for event in digest.decisions)),
+        "verified_sections": dict(Counter(story.briefing_section for story in digest.stories
+                                           if story.status == "verified-analysis")),
         "assessment_failures": dict(Counter(event.decision for event in digest.decisions
                                              if event.assessment is None))}
 
@@ -29,22 +33,26 @@ def render_parts(digest, max_bytes=80 * 1024, *, include_excerpts=False):
     zone = ZoneInfo(digest.timezone)
     environment.filters["localtime"] = lambda value: value.astimezone(zone).strftime("%d %b %Y, %H:%M %Z") if value else "Unknown"
     templates = [environment.get_template(name) for name in ("digest.html.j2", "digest.txt.j2")]
-    counts = Counter(s.topic for s in digest.stories)
+    counts = Counter(s.briefing_section for s in digest.stories)
     by_id = {s.event_id: s for s in digest.stories}
     empty = {}
-    for topic in TOPICS:
-        providers = [h for h in digest.health if topic in h.topics and h.status != "disabled"]
-        if providers and all(h.status == "failed" for h in providers):
+    for topic in BRIEFING_SECTIONS:
+        providers = [h for h in digest.health if h.status != "disabled"]
+        if topic == "world" and any(s.briefing_section == "market" and s.world_score is not None
+                                    and s.world_score > 0 for s in digest.stories):
+            empty[topic] = "Related world developments are included with their market context in Market catalysts."
+        elif providers and all(h.status == "failed" for h in providers):
             empty[topic] = "Sources unavailable; news coverage could not be established."
-        elif any(e.assessment is None or e.eligible and e.assessment.topic == topic for e in digest.decisions):
+        elif any(e.assessment is None or e.eligible and e.briefing_section == topic for e in digest.decisions):
             empty[topic] = "No verified stories available from the collected evidence."
         else:
             empty[topic] = "No qualifying important stories found in the collected evidence."
-    # Keep each topic together, preserving importance order within it.
-    ordered = [s for topic in TOPICS for s in digest.stories if s.topic == topic]
+    # One full story per event, even when it serves both reader goals.
+    ordered = [s for topic in BRIEFING_SECTIONS for s in digest.stories if s.briefing_section == topic]
 
     def render(stories, index, total, continued, reserve=False):
-        context = dict(digest=digest, stories=stories, topics=TOPICS, labels=LABELS, counts=counts,
+        context = dict(digest=digest, stories=stories, topics=BRIEFING_SECTIONS, labels=LABELS,
+            section_labels=SECTION_LABELS, counts=counts,
             ai_coverage=ai_coverage(digest),
             status_labels=STATUS, empty_states=empty, continued=continued, index=index, total=total,
             language_code="en", takeaways=[by_id[i] for i in digest.takeaways if i in by_id])
@@ -56,12 +64,12 @@ def render_parts(digest, max_bytes=80 * 1024, *, include_excerpts=False):
     for story in ordered:
         # Reserve space for subject/continuation labels using the maximum possible part count.
         candidate = groups[-1] + [story]
-        html, _ = render(candidate, len(groups), max(1, len(ordered) + 1), set(TOPICS), reserve=True)
+        html, _ = render(candidate, len(groups), max(1, len(ordered) + 1), set(BRIEFING_SECTIONS), reserve=True)
         if len(html.encode("utf-8")) > max_bytes:
             if not groups[-1] and len(groups) > 1:
                 raise ValueError("One story exceeds the HTML budget; shorten evidence output or raise HTML_BYTES")
             groups.append([story])
-            html, _ = render([story], len(groups), len(ordered) + 1, set(TOPICS), reserve=True)
+            html, _ = render([story], len(groups), len(ordered) + 1, set(BRIEFING_SECTIONS), reserve=True)
             if len(html.encode("utf-8")) > max_bytes:
                 raise ValueError("One story exceeds the HTML budget; shorten evidence output or raise HTML_BYTES")
         else:
@@ -72,5 +80,5 @@ def render_parts(digest, max_bytes=80 * 1024, *, include_excerpts=False):
         if len(html.encode("utf-8")) > max_bytes:
             raise ValueError("Digest header/footer exceeds HTML budget; increase HTML_BYTES")
         parts.append(RenderedPart(index=index, total=len(groups), html=html, text=text, event_ids=[s.event_id for s in stories]))
-        seen.update(s.topic for s in stories)
+        seen.update(s.briefing_section for s in stories)
     return parts

@@ -9,9 +9,9 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
     → conservative URL / exact-title / linked-post event clusters
     → OpenAI (default) or explicitly selected Gemini structured cluster assessment
     → precise cross-language event-key merging + reassessment
-    → deterministic evidence gate + importance threshold
+    → attributed evidence gate + independent world/market thresholds
     → per-event summary → numeric/source-ID guards → evidence audit
-    → validated stories or attributed source excerpts
+    → audited world/market stories (failed excerpts kept only in diagnostics)
     → optional cited connections/watch items + separate audits
     → HTML + text templates → byte-aware continuation emails
     → verified stories only → frozen edition + durable checkpoint → Gmail SMTP
@@ -38,9 +38,9 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
 
 ## Policy and failure behavior
 
-- Every adequately evidenced event scoring at least 70/100 is included. Weights: impact .40, relevance .25, novelty .20, urgency .15, each scored 0–5. There is no maximum per topic; an empty section is honest.
+- Every adequately evidenced event meeting either world or market threshold (default 3/5) reaches generation. Legacy records use the weighted importance fallback (70/100). There is no fixed story count; provider and global budget limits can reduce audited output.
 - Source text remains untrusted data. Importance is an editorial judgment. Schema/ID/numeric checks are deterministic; semantic claim audits use the selected AI provider and retain their limitations.
-- Title-only evidence does not justify detailed analysis. A configured primary source can evidence its own announcement. High-risk third-party claims need independent original reporting; reprints and linked copies do not count twice.
+- Title-only evidence does not justify detailed analysis. A configured primary source can evidence its own announcement. Credible publisher reporting remains attributed; sensitive claims receive the same source and semantic audit rather than a two-source publication ban. Reprints and linked copies do not count as independent corroboration.
 - Failed summaries and assessments remain in JSON diagnostics, with safe reasons and no invented scores. Reader HTML/text omit them. Partial failure allows verified stories to be delivered. With no verified stories from collected candidates, delivery is withheld. Frozen pending payloads containing failed-analysis stories cannot be sent; confirmed parts remain skipped.
 - Numeric facts and dates must be present in the cited evidence; source URLs come from the registry. Conditional analysis must not invent causation. Connections/watch items require source-backed stories and another audit.
 - Collection/AI budgets are coverage limits, never hidden story caps. Unknown/future dates are quarantined. Syndication detection, cross-language identity and judgment require calibration on actual output.
@@ -59,3 +59,14 @@ The workflow restores only matching-date artifacts from scheduled/manual executi
 Restoration logs the frozen window end, confirmed part count and AI-verified story count, and saves the original previews for inspection. Manual `preview_only` skips restoration and calls `--dry-run`, which ignores local delivery state, generates fresh output and never sends email. A separate bounded diagnostic uses one dated BBC RSS article to exercise assessment, generation and audit through the real engine, saving previews without market or delivery access.
 
 The Python runtime remains 3.10. Node 24 is required only for the official artifact SDK in Actions; no service/database/hosting system is introduced. X requires separate API access and configured queries. Gemini Search grounding and a persistent news-history database remain optional future additions, outside this change.
+
+
+## World developments and market catalysts
+
+Assessments have independent 0–5 world/market scores plus evidence-grounded regions/themes. Either configured purpose threshold can select a story; legacy records without these fields retain their old importance fallback. Supported reporting and usable limited excerpts with facts reach generation. High-risk publisher reporting is attributed, not automatically excluded for lacking two collected sources. Title-only, disputed/unverified and unsupported unknown-source claims remain excluded. Event reporting basis distinguishes reported, primary-statement and independently corroborated evidence.
+
+Market drafts require structured context with cited exposure/follow-up claims, conditional mechanism, timing and uncertainty. Numeric/citation guards cover the entire draft and context; the existing separate verifier audits all fields and required attribution. Context-only article citations are retained in the resulting story. World and market summary candidates alternate in priority order under the shared budgets; no story count is forced. A cross-purpose story has one canonical body in Market catalysts, and both scores are displayed. JSON retains all candidate decisions; readers see only passing summaries.
+
+HTML/text partition by reader purpose while preserving unique event IDs, byte limits and frozen delivery state. Old records load through backward-compatible defaults. Same-day reruns continue restoring saved editions instead of silently sending a second one. Collection adds dated SCMP Technology, Semiconductor Engineering, NVIDIA and Google AI RSS feeds; primary announcements do not prove advertised benefits. Source failures remain visible in coverage diagnostics.
+
+Assessment candidates are interleaved by source, newest first within each source, before AI screening. This prevents a high-volume routine-price feed or network completion order from leaving dedicated technology sources at the tail of the assessment budget. The ordering is deterministic and preserves every event; it is not a per-source article cap. A bounded-budget regression verifies a late technology feed still gets assessed.

@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 Topic = Literal["finance", "crypto", "indonesia", "tech"]
 TOPICS = ("finance", "crypto", "indonesia", "tech")
 LABELS = {"finance": "Global Finance", "crypto": "Cryptocurrency", "indonesia": "Indonesian Market", "tech": "Technology"}
+BRIEFING_SECTIONS = ("world", "market")
+SECTION_LABELS = {"world": "World developments", "market": "Market catalysts"}
 
 
 def stable_id(text: str) -> str:
@@ -99,6 +101,10 @@ class Assessment(Record):
     independent_origins: list[str] = Field(default_factory=list)
     facts: list[Fact] = Field(default_factory=list)
     reason: str = Field(max_length=1200)
+    world_score: int | None = Field(default=None, ge=0, le=5)
+    market_score: int | None = Field(default=None, ge=0, le=5)
+    regions: list[Literal["China", "US", "Indonesia", "Europe", "Asia", "Global", "Other"]] = Field(default_factory=list)
+    themes: list[Literal["AI", "Semiconductors", "Policy", "Corporate", "Cybersecurity", "Macro", "Crypto", "Other"]] = Field(default_factory=list)
 
 
 class Assessments(Record):
@@ -111,11 +117,21 @@ class Event(Record):
     assessment: Assessment | None = None
     eligible: bool = False
     decision: str = "Assessment unavailable"
+    briefing_section: Literal["world", "market"] = "world"
+    reporting_basis: Literal["reported", "primary-statement", "corroborated"] = "reported"
 
 
 class Claim(Record):
     text: str = Field(min_length=1, max_length=1200)
     article_ids: list[str] = Field(min_length=1)
+
+
+class MarketContext(Record):
+    affected: list[Claim] = Field(min_length=1, max_length=4)
+    mechanism: str = Field(min_length=1, max_length=600)
+    timing: str = Field(min_length=1, max_length=240)
+    watch: list[Claim] = Field(default_factory=list, max_length=3)
+    uncertainty: str = Field(min_length=1, max_length=400)
 
 
 class Draft(Record):
@@ -124,6 +140,7 @@ class Draft(Record):
     summary: list[Claim] = Field(min_length=1, max_length=4)
     why_it_matters: str = Field(max_length=600)
     caveat: str = Field(default="", max_length=400)
+    market_context: MarketContext | None = None
 
 
 class Drafts(Record):
@@ -162,6 +179,13 @@ class Story(Record):
     published_at: datetime
     status: Literal["verified-analysis", "source-excerpt", "unassessed"]
     caveat: str = ""
+    briefing_section: Literal["world", "market"] = "world"
+    reporting_basis: Literal["reported", "primary-statement", "corroborated"] = "reported"
+    world_score: int | None = Field(default=None, ge=0, le=5)
+    market_score: int | None = Field(default=None, ge=0, le=5)
+    regions: list[str] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list)
+    market_context: MarketContext | None = None
 
 
 class MarketQuote(Record):
@@ -199,7 +223,7 @@ class Digest(Record):
     takeaways: list[str] = Field(default_factory=list)  # Story IDs; never independent AI prose.
     notes: list[CitedNote] = Field(default_factory=list)
     decisions: list[Event] = Field(default_factory=list)
-    pipeline_version: str = "2.0.0"
+    pipeline_version: str = "3.0.0"
 
 
 class RenderedPart(Record):

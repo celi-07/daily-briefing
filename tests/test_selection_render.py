@@ -60,7 +60,7 @@ def test_short_primary_announcement_is_not_arbitrarily_dropped(article_factory,e
     assert select([event],{article.id:article},70) == [event]
 
 
-def test_high_risk_needs_independent_origins(article_factory, event_factory):
+def test_high_risk_reporting_distinguishes_corroboration(article_factory, event_factory):
     a, b = article_factory(), article_factory(1, source_id="other", url="https://other.example/news")
     event = event_factory(a, high_risk=True)
     event.article_ids.append(b.id)
@@ -68,8 +68,10 @@ def test_high_risk_needs_independent_origins(article_factory, event_factory):
     registry = {a.id:a, b.id:b}
     assert select([event], registry, 70) == [event]
     event.eligible = False
-    b.text = a.text  # A reprint does not corroborate.
-    assert select([event], registry, 70) == []
+    assert event.reporting_basis == "corroborated"
+    b.text = a.text  # A reprint does not corroborate, but attributed reporting remains eligible.
+    assert select([event], registry, 70) == [event]
+    assert event.reporting_basis == "reported"
 
 
 def test_canonical_urls_preserve_content_parameters():

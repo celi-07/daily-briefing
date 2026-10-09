@@ -269,5 +269,49 @@
     "enabled": true,
     "queries": [],
     "primary_accounts": []
+  },
+  {
+    "id": "scmp-tech",
+    "name": "South China Morning Post Technology",
+    "kind": "rss",
+    "url": "https://www.scmp.com/rss/36/feed/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "semiconductor-engineering",
+    "name": "Semiconductor Engineering",
+    "kind": "rss",
+    "url": "https://semiengineering.com/feed/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "reporter",
+    "enabled": true
+  },
+  {
+    "id": "nvidia-blog",
+    "name": "NVIDIA Blog",
+    "kind": "rss",
+    "url": "https://blogs.nvidia.com/feed/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "primary",
+    "enabled": true
+  },
+  {
+    "id": "google-ai",
+    "name": "Google AI",
+    "kind": "rss",
+    "url": "https://blog.google/innovation-and-ai/technology/ai/rss/",
+    "topics": [
+      "tech"
+    ],
+    "trust": "primary",
+    "enabled": true
   }
 ]

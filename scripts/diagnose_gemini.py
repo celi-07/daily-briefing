@@ -45,7 +45,8 @@ def end_to_end(settings, *, fetcher=None, engine=None, cutoff=None):
         engine.assess([event], registry, notices)
         story = None
         if event.assessment is not None:
-            if not select([event], registry, settings.importance_threshold):
+            if not select([event], registry, settings.importance_threshold,
+                          world_threshold=settings.world_threshold, market_threshold=settings.market_threshold):
                 notices.append('This article did not qualify for the normal importance/evidence policy; '
                                'summary generation is exercised only as a diagnostic.')
             story = engine.summarize(event, registry)

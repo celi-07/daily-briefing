@@ -50,17 +50,27 @@
 </td></tr>{% endfor %}
 </table></td></tr>{% endif %}
 {% for topic in topics %}
-{% set section = stories|selectattr('topic', 'equalto', topic)|list %}
+{% set section = stories|selectattr('briefing_section', 'equalto', topic)|list %}
 {% if section or total == 1 %}
 <tr><td class="content" style="padding:0 16px 24px;">
-<h2 class="ink" style="margin:0 0 16px;padding-top:16px;border-top:2px solid #dce3ee;font-size:22px;line-height:1.4;color:#17243c;">{{ labels[topic] }} <span class="muted" style="font-size:14px;font-weight:normal;color:#526176;">{{ section|length }} {% if total > 1 %}in this part · {{ counts[topic] }} total{% else %}stories{% endif %}{% if topic in continued %} · continued{% endif %}</span></h2>
+<h2 class="ink" style="margin:0 0 16px;padding-top:16px;border-top:2px solid #dce3ee;font-size:22px;line-height:1.4;color:#17243c;">{{ section_labels[topic] }} <span class="muted" style="font-size:14px;font-weight:normal;color:#526176;">{{ section|length }} {% if total > 1 %}in this part · {{ counts[topic] }} total{% else %}stories{% endif %}{% if topic in continued %} · continued{% endif %}</span></h2>
 {% if not section %}<p class="muted" style="font-size:16px;line-height:1.6;color:#526176;">{{ empty_states[topic] }}</p>{% endif %}
 {% for story in section %}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr><td style="padding:0 0 24px;" data-event-id="{{ story.event_id }}">
-<p class="muted" style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#526176;">{{ story.published_at|localtime }} · {% if story.importance is not none %}Importance {{ story.importance|int }}/100 · {% endif %}{{ status_labels[story.status] }}{% for t in story.secondary_topics if t != story.topic %} · {{ labels[t] }}{% endfor %}</p>
+<p class="muted" style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#526176;">{{ story.published_at|localtime }} · {% if story.world_score is none and story.market_score is none and story.importance is not none %}Importance {{ story.importance|int }}/100 · {% endif %}{{ status_labels[story.status] }}{% for t in story.secondary_topics if t != story.topic %} · {{ labels[t] }}{% endfor %}</p>
 <h3 class="ink" style="margin:0 0 12px;font-size:20px;line-height:1.4;color:#17243c;overflow-wrap:anywhere;word-break:break-word;">{{ story.headline }}</h3>
 <p class="ink" style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#17243c;overflow-wrap:anywhere;word-break:break-word;">{{ story.summary }}</p>
 {% if story.why_it_matters %}<p class="ink" style="margin:0 0 12px;font-size:16px;line-height:1.6;color:#17243c;"><strong>Why it matters:</strong> {{ story.why_it_matters }}</p>{% endif %}
+<p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#526176;">{{ labels[story.topic] }}{% for region in story.regions %} · {{ region }}{% endfor %}{% for theme in story.themes %} · {{ theme }}{% endfor %}{% if story.world_score is not none %} · World significance {{ story.world_score }}/5{% endif %}{% if story.market_score is not none %} · Market relevance {{ story.market_score }}/5{% endif %}<br>{% if story.reporting_basis == 'primary-statement' %}Organization's own statement; announced benefits remain claims.{% elif story.reporting_basis == 'corroborated' %}Multiple independent reports in the collected evidence.{% else %}Reported by {% for citation in story.citations %}{{ citation.source }}{% if not loop.last %}, {% endif %}{% endfor %}; summary checked against the reporting.{% endif %}</p>
+{% if story.market_context %}
+<p class="ink" style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#17243c;"><strong>Market context</strong><br>
+{% if story.market_context.affected %}<strong>Exposure:</strong> {% for claim in story.market_context.affected %}{{ claim.text }}{% if not loop.last %}; {% endif %}{% endfor %}<br>{% endif %}
+<strong>Possible implications:</strong> {{ story.market_context.mechanism }}<br>
+<strong>Timing:</strong> {{ story.market_context.timing }}<br>
+{% if story.market_context.watch %}<strong>Watch:</strong> {% for claim in story.market_context.watch %}{{ claim.text }}{% if not loop.last %}; {% endif %}{% endfor %}<br>{% endif %}
+<strong>Uncertainty:</strong> {{ story.market_context.uncertainty }}<br>
+<span class="muted" style="color:#526176;">Whether this is already reflected in market prices has not been assessed.</span></p>
+{% endif %}
 {% if story.caveat %}<p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.6;color:#526176;">{{ story.caveat }}</p>{% endif %}
 <p style="margin:0;font-size:14px;line-height:2;overflow-wrap:anywhere;word-break:break-word;">{% for citation in story.citations %}<a class="link" href="{{ citation.url }}" style="color:#1d4ed8;text-decoration:underline;padding:10px 0;">Read {{ citation.source }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
 </td></tr></table>{% endfor %}
@@ -76,7 +86,7 @@
 <h2 class="ink" style="margin:0 0 12px;font-size:18px;color:#17243c;">Coverage &amp; sources</h2>
 {% for notice in digest.notices %}<p class="muted" style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#526176;">{{ notice }}</p>{% endfor %}
 {% for source in digest.health if source.status != 'ok' %}<p class="muted" style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#526176;"><strong>{{ source.name }}:</strong> {{ source.status }}. {{ source.detail }}</p>{% endfor %}
-<p class="muted" style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#526176;">Only stories with evidence-checked AI analysis are shown. Importance scores are editorial judgments. Automated briefing · AI analysis &amp; publisher sources · {{ digest.pipeline_version }}.</p>
+<p class="muted" style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#526176;">Only stories with evidence-checked AI analysis are shown. Scores are editorial judgments. Evidence checks verify the summary against its sources, not the underlying event independently. Automated briefing · AI analysis &amp; publisher sources · {{ digest.pipeline_version }}.</p>
 {% if total > 1 %}<p class="muted" style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#526176;">This is part {{ index }} of {{ total }}. Read all numbered emails for the full briefing.</p>{% endif %}
 </td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
