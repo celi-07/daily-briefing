@@ -111,7 +111,7 @@ class GeminiEngine:
         self.unavailable = False
         self.failure_reason = ""
 
-    def _generate(self, prompt, schema, model):
+    def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
         if self.transport:
             return self.transport(prompt, schema, model)
         if self.client is None:
@@ -125,7 +125,7 @@ class GeminiEngine:
         from google.genai import types
         response = self.client.models.generate_content(model=model, contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json",
-                response_json_schema=schema.model_json_schema(), temperature=.2, max_output_tokens=8192,
+                response_json_schema=schema.model_json_schema(), temperature=.2, max_output_tokens=max_output_tokens,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)))
         if response.candidates and str(response.candidates[0].finish_reason).endswith("MAX_TOKENS"):
             raise AIError("AI output truncated", splittable=True)
@@ -145,7 +145,10 @@ class GeminiEngine:
             return self.cache[key]
         if self.unavailable:
             raise AIError(self.failure_reason or "AI unavailable for this run", category="unavailable")
-        reserve = len(prompt) // 2 + 8192
+        # A one-event assessment cannot need the output space of a six-event
+        # batch. Scale both the actual provider cap and its budget reservation.
+        output_limit = min(8192, 1024 * (len(payload) + 1)) if stage == "assess" and isinstance(payload, list) else 8192
+        reserve = len(prompt) // 2 + output_limit
         configured_models = list(dict.fromkeys(filter(None, [self.settings.gemini_model, self.settings.gemini_fallback_model])))
         preferred = self.preferred_model if self.preferred_model in configured_models else None
         models = list(dict.fromkeys(filter(None, [preferred, *configured_models])))
@@ -164,7 +167,14 @@ class GeminiEngine:
                         or self.assessment_tokens + reserve > self.settings.ai_tokens * fraction
                         or self.assessment_seconds >= self.settings.ai_seconds * fraction):
                     self.failure_reason = "AI assessment allowance exhausted; budget reserved for summaries and audits"
-                    raise AIError(self.failure_reason, category="assessment-budget")
+                    # A large batch may not fit even though smaller batches do.
+                    # Split before making a paid request, but never split once
+                    # the request/time allowance or minimum token reserve is gone.
+                    can_split = (isinstance(payload, list) and len(payload) > 1
+                        and self.assessment_requests < max(1, int(self.settings.ai_requests * fraction))
+                        and self.assessment_seconds < self.settings.ai_seconds * fraction
+                        and self.assessment_tokens + 2048 < self.settings.ai_tokens * fraction)
+                    raise AIError(self.failure_reason, category="assessment-budget", splittable=can_split)
                 if total_exhausted or self.tokens + reserve > self.settings.ai_tokens:
                     self.unavailable = True
                     self.failure_reason = "AI request/token/time budget exhausted"
@@ -175,7 +185,7 @@ class GeminiEngine:
                 self._account_tokens(reserve, stage)
                 attempt_started = time.monotonic() if stage == "assess" else None
                 try:
-                    text, tokens = self._generate(prompt, schema, model)
+                    text, tokens = self._generate(prompt, schema, model, max_output_tokens=output_limit)
                     if tokens is not None:
                         self._account_tokens(tokens - reserve, stage)
                     result = schema.model_validate_json(text)
@@ -222,13 +232,16 @@ class GeminiEngine:
         self.unavailable = True
         raise AIError(self.failure_reason or "Configured Gemini models unavailable", category="provider")
 
-    def evidence(self, events, registry):
+    def evidence(self, events, registry, *, assessment=False):
         data = []
         for event in events:
             articles = []
             for aid in event.article_ids:
                 a = registry[aid]
-                text = a.text[:self.settings.evidence_chars]
+                limit = self.settings.evidence_chars
+                if assessment:
+                    limit = min(limit, self.settings.assessment_evidence_chars)
+                text = a.text[:limit]
                 articles.append({"id": a.id, "title": a.title, "text": text, "trust": a.trust,
                     "source": a.source_name, "source_type": a.source_type, "url": a.url,
                     "published_at": a.published_at.isoformat(), "topic_hints": a.topics,
@@ -238,7 +251,7 @@ class GeminiEngine:
         return data
 
     def assess_batch(self, events, registry):
-        response = self.request("assess", self.evidence(events, registry), Assessments)
+        response = self.request("assess", self.evidence(events, registry, assessment=True), Assessments)
         valid_assessments(response.items, events)
         by_id = {item.event_id: item for item in response.items}
         for event in events:
@@ -257,6 +270,8 @@ class GeminiEngine:
                     batch(items[middle:])
                 else:
                     failures[str(exc)] += len(items)
+                    for event in items:
+                        event.decision = str(exc)
         size = self.settings.ai_batch_size
         for offset in range(0, len(events), size):
             batch(events[offset:offset + size])

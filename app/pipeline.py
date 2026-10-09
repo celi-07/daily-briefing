@@ -16,7 +16,7 @@ from app.enrich import enrich
 from app.http import Fetcher
 from app.market import fetch_market_snapshot
 from app.models import Article, Digest, RenderedPart, SourceHealth
-from app.render import render_parts
+from app.render import ai_coverage, render_parts
 from app.selection import select, sort_stories, source_story
 from app.sources import cryptowave, rss, x
 
@@ -84,8 +84,8 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         for event in chosen:
             story = engine.summarize(event, registry)
             if story is None:
-                notices.append("Some qualifying stories use source excerpts because AI summaries could not be verified.")
-                story = source_story(event, registry)
+                notices.append("Some qualifying stories use source excerpts because AI generation or evidence auditing was unavailable or unsuccessful.")
+                story = source_story(event, registry, failure_reason=getattr(engine, "failure_reason", ""))
             stories.append(story)
         # Failed assessments remain visible as explicitly unassessed, attributable source excerpts.
         # They are not silently called important or confirmed by the AI.
@@ -113,6 +113,7 @@ def save_outputs(digest, parts, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "digest.json").write_text(digest.model_dump_json(indent=2), encoding="utf-8")
     (output_dir / "coverage.json").write_text(json.dumps({"notices": digest.notices,
+        "ai": ai_coverage(digest),
         "sources": [h.model_dump() for h in digest.health]}, indent=2), encoding="utf-8")
     for part in parts:
         name = "preview" if part.index == 1 else f"preview-{part.index}"

@@ -21,7 +21,7 @@ Put your own credentials in the ignored `.env` file. Never commit them. Rotate a
 | Variable | Purpose |
 |---|---|
 | `GEMINI_API_KEY` | Gemini API key; required for AI assessment, optional for labeled source-only fallback |
-| `GEMINI_MODEL` | Configurable model; default `gemini-3.8-flash` (verify availability for your account) |
+| `GEMINI_MODEL` | Configurable model; default `gemini-3.5-flash-lite` (verify availability for your account) |
 | `GEMINI_FALLBACK_MODEL` | Optional alternative model if the primary model fails |
 | `GMAIL_ADDRESS` | Gmail sender; required for actual delivery |
 | `GMAIL_APP_PASSWORD` | Gmail app password with 2-step verification; required for delivery |
@@ -62,7 +62,7 @@ The initial importance rubric is impact 40%, relevance 25%, novelty 20%, urgency
 
 All qualifying stories are sorted by importance and recency without a count limit. Failed assessments become **unassessed source excerpts with no invented score**, rather than silently disappearing or being labeled important. Coverage applies to collected evidence, not the entire internet. AI verification reduces unsupported output but is not a guarantee that every publisher claim is true.
 
-Useful `.env` settings (defaults in `.env.example`): `IMPORTANCE_THRESHOLD`, `WINDOW_HOURS`, `TIMEZONE`, `LANGUAGE`, `ENRICHMENT`, `HTTP_REQUESTS`, `HTTP_TIMEOUT`, `SOURCE_PAGES`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS`, `AI_BATCH_SIZE`, `AI_ASSESSMENT_FRACTION`, `EVIDENCE_CHARS`, `HTML_BYTES`. Assessment receives 60% of the shared request/token/time allowances by default, including retries and merged-event reassessment; the remaining budget can generate summaries and audits. Checks run before each attempt, so an in-flight call can overrun a time allowance or token estimate. Unassessed events retain explicit coverage notices and excerpts. Overall limits still apply; this reservation does not guarantee every event receives AI analysis.
+Useful `.env` settings (defaults in `.env.example`): `IMPORTANCE_THRESHOLD`, `WINDOW_HOURS`, `TIMEZONE`, `LANGUAGE`, `ENRICHMENT`, `HTTP_REQUESTS`, `HTTP_TIMEOUT`, `SOURCE_PAGES`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS`, `AI_BATCH_SIZE`, `AI_ASSESSMENT_FRACTION`, `ASSESSMENT_EVIDENCE_CHARS`, `EVIDENCE_CHARS`, `HTML_BYTES`. Assessment receives 80% of the shared request/token/time allowances by default, including retries and merged-event reassessment; the remaining budget can generate summaries and audits. Checks run before each attempt, so an in-flight call can overrun a time allowance or token estimate. Unassessed events retain explicit coverage notices and excerpts. Overall limits still apply; this reservation does not guarantee every event receives AI analysis.
 
 ## Email and delivery
 
@@ -76,7 +76,7 @@ SMTP cannot promise exactly-once delivery. If a connection is lost during messag
 
 ## GitHub Actions
 
-Add the existing credential names as repository Actions secrets, plus optional `X_BEARER_TOKEN`. `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `TIMEZONE`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS` and `AI_ASSESSMENT_FRACTION` can be repository variables. The delivery workflow defaults to `gemini-3.8-flash` with `gemini-3.5-flash-lite` as fallback; local runs use the fallback configured in `.env`. With a distinct fallback configured, a temporary primary-model failure moves directly to it; the final model gets at most three attempts with backoff. Temporary failures affect that request and allow later events to recover. Authentication, configuration and overall budget failures stop AI for the run. Keep tokens out of source configuration.
+Add the existing credential names as repository Actions secrets, plus optional `X_BEARER_TOKEN`. `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `TIMEZONE`, `AI_REQUESTS`, `AI_TOKENS`, `AI_SECONDS` and `AI_ASSESSMENT_FRACTION` can be repository variables. The delivery workflow defaults to the previously live-verified `gemini-3.5-flash-lite` with `gemini-3.8-flash` as fallback (an explicit 3.8 primary keeps Flash-Lite as its default fallback); local runs use the fallback configured in `.env`. With a distinct fallback configured, a temporary primary-model failure moves directly to it; the final model gets at most three attempts with backoff. Temporary failures affect that request and allow later events to recover. Authentication, configuration and overall budget failures stop AI for the run. Keep tokens out of source configuration.
 
 The latest repository schedule is preserved: **00:45 UTC / 07:45 WIB daily**. GitHub scheduling and generation can delay arrival; no promise of delivery before 08:00 is made. Manually run **Daily Morning Briefing** on the default branch to deliver. To check fresh live output, enable its `preview_only` input and download the `briefing-preview-*` artifact. This skips checkpoint restoration, generates new HTML/text/JSON, and sends no email. A normal same-day rerun restores frozen content, logs its original generation time and verified-story count, and resumes only unsent parts. Its success is not evidence that new AI calls succeeded. Keep saved delivery state intact. The separate **Tests** workflow on pull requests performs offline checks and saves synthetic previews without sending email or consuming AI quota.
 
@@ -98,3 +98,13 @@ node scripts/checkpoint/test.cjs
 ```
 
 [Architecture](docs/architecture.md) describes module boundaries. [Acceptance report](docs/acceptance.md) records measured checks, source-access limitations and email clients still requiring real-client verification.
+
+### Why an edition can contain mostly excerpts
+
+The October 7 full-preview report recorded 263 assessed events out of 365, with 102 unassessed excerpts after the assessment allowance ran out. Twelve stories had verified AI analysis. A successful delivery job means the email was processed; it does not mean all articles received AI analysis. A same-day rerun can also restore a frozen edition without making any new AI calls.
+
+Assessment now uses at most `ASSESSMENT_EVIDENCE_CHARS=3000` characters per article, bounded by `EVIDENCE_CHARS`. The truncation flag is supplied to the model, and short evidence cannot justify invented facts. Eligible summaries and their evidence audits still receive up to `EVIDENCE_CHARS=10000` characters per article. Facts/reasons are concise to reduce output costs. Batches that do not fit the remaining token allowance split before a provider call; smaller batches also have smaller output caps and matching reservations (2,048 for one event, up to 8,192 for large batches); request/time limits and the summary/audit reservation remain enforced. No model switch or higher paid quota is required to benefit from the reduced assessment input. This does not guarantee complete coverage on every source volume or provider outage.
+
+Every email part now reports assessed/total events, verified stories, summary fallbacks and unassessed events. Each unassessed excerpt carries its actual safe failure reason; `coverage.json` includes machine-readable AI counts and grouped failures. These are distinct from below-threshold stories, which are assessed and intentionally excluded. Inspect a fresh `preview_only` run after merging, and check existing repository variables if they override the model defaults.
+
+ChatGPT account use is not enabled by being signed into Codex. [Sign in with ChatGPT](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt) requires a separate app registration/sign-in and granted plan-usage scope; this GitHub Actions job has no such connection. The code does not reuse desktop session tokens. This change repairs the existing Gemini integration rather than claiming an unconfigured ChatGPT fallback is active.

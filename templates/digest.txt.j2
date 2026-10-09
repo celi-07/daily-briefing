@@ -1,5 +1,8 @@
 MORNING BRIEFING — {{ digest.edition_date }}{% if total > 1 %} — Part {{ index }}/{{ total }}{% endif %}
 News window: {{ digest.window_start|localtime }} – {{ digest.window_end|localtime }}
+AI coverage: {{ ai_coverage.assessed }}/{{ ai_coverage.events }} events assessed · {{ ai_coverage.verified_stories }} evidence-checked stories · {{ ai_coverage.source_excerpts }} summary fallbacks · {{ ai_coverage.unassessed }} unassessed events.
+{% if ai_coverage.unassessed %}Coverage is incomplete. Unassessed excerpts have not passed importance screening; see each item's reason.
+{% endif %}
 
 {% if index == 1 %}{% if takeaways %}AT A GLANCE
 {% for story in takeaways %}{{ loop.index }}. {{ story.headline }} ({{ labels[story.topic] }})

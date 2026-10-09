@@ -26,6 +26,8 @@
 <h1 class="ink" style="margin:0 0 12px;font-size:30px;line-height:1.2;color:#17243c;">A clearer start to your day.</h1>
 <p class="muted" style="margin:0;font-size:14px;line-height:1.6;color:#526176;">{{ digest.edition_date }} · {{ digest.timezone }}{% if total > 1 %} · Part {{ index }}/{{ total }}{% endif %}</p>
 <p class="muted" style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#526176;">News window: {{ digest.window_start|localtime }} – {{ digest.window_end|localtime }}</p>
+<p class="muted" style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#526176;">AI coverage: {{ ai_coverage.assessed }}/{{ ai_coverage.events }} events assessed · {{ ai_coverage.verified_stories }} evidence-checked stories · {{ ai_coverage.source_excerpts }} summary fallbacks · {{ ai_coverage.unassessed }} unassessed events.</p>
+{% if ai_coverage.unassessed %}<p class="ink" style="margin:8px 0 0;font-size:13px;line-height:1.6;color:#17243c;">Coverage is incomplete. Unassessed excerpts have not passed importance screening; see each item's reason.</p>{% endif %}
 </td></tr>
 {% if index == 1 and takeaways %}
 <tr><td class="content" style="padding:0 16px 24px;">
