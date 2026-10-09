@@ -15,6 +15,10 @@ def ai_coverage(digest):
         "unassessed": len(digest.decisions) - assessed,
         "verified_stories": sum(story.status == "verified-analysis" for story in digest.stories),
         "source_excerpts": sum(story.status == "source-excerpt" for story in digest.stories),
+        "qualifying_events": sum(event.eligible for event in digest.decisions),
+        "selection_decisions": dict(Counter(event.decision for event in digest.decisions)),
+        "verified_sections": dict(Counter(story.briefing_section for story in digest.stories
+                                           if story.status == "verified-analysis")),
         "assessment_failures": dict(Counter(event.decision for event in digest.decisions
                                              if event.assessment is None))}
 
