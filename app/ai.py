@@ -164,7 +164,14 @@ class GeminiEngine:
                         or self.assessment_tokens + reserve > self.settings.ai_tokens * fraction
                         or self.assessment_seconds >= self.settings.ai_seconds * fraction):
                     self.failure_reason = "AI assessment allowance exhausted; budget reserved for summaries and audits"
-                    raise AIError(self.failure_reason, category="assessment-budget")
+                    # A large batch may not fit even though smaller batches do.
+                    # Split before making a paid request, but never split once
+                    # the request/time allowance or minimum token reserve is gone.
+                    can_split = (isinstance(payload, list) and len(payload) > 1
+                        and self.assessment_requests < max(1, int(self.settings.ai_requests * fraction))
+                        and self.assessment_seconds < self.settings.ai_seconds * fraction
+                        and self.assessment_tokens + 8192 < self.settings.ai_tokens * fraction)
+                    raise AIError(self.failure_reason, category="assessment-budget", splittable=can_split)
                 if total_exhausted or self.tokens + reserve > self.settings.ai_tokens:
                     self.unavailable = True
                     self.failure_reason = "AI request/token/time budget exhausted"
@@ -222,13 +229,16 @@ class GeminiEngine:
         self.unavailable = True
         raise AIError(self.failure_reason or "Configured Gemini models unavailable", category="provider")
 
-    def evidence(self, events, registry):
+    def evidence(self, events, registry, *, assessment=False):
         data = []
         for event in events:
             articles = []
             for aid in event.article_ids:
                 a = registry[aid]
-                text = a.text[:self.settings.evidence_chars]
+                limit = self.settings.evidence_chars
+                if assessment:
+                    limit = min(limit, self.settings.assessment_evidence_chars)
+                text = a.text[:limit]
                 articles.append({"id": a.id, "title": a.title, "text": text, "trust": a.trust,
                     "source": a.source_name, "source_type": a.source_type, "url": a.url,
                     "published_at": a.published_at.isoformat(), "topic_hints": a.topics,
@@ -238,7 +248,7 @@ class GeminiEngine:
         return data
 
     def assess_batch(self, events, registry):
-        response = self.request("assess", self.evidence(events, registry), Assessments)
+        response = self.request("assess", self.evidence(events, registry, assessment=True), Assessments)
         valid_assessments(response.items, events)
         by_id = {item.event_id: item for item in response.items}
         for event in events:
@@ -257,6 +267,8 @@ class GeminiEngine:
                     batch(items[middle:])
                 else:
                     failures[str(exc)] += len(items)
+                    for event in items:
+                        event.decision = str(exc)
         size = self.settings.ai_batch_size
         for offset in range(0, len(events), size):
             batch(events[offset:offset + size])

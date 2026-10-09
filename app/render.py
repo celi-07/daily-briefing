@@ -9,6 +9,16 @@ from app.models import LABELS, TOPICS, RenderedPart
 STATUS = {"verified-analysis": "Evidence-checked analysis", "source-excerpt": "Source excerpt", "unassessed": "Unassessed source excerpt"}
 
 
+def ai_coverage(digest):
+    assessed = sum(event.assessment is not None for event in digest.decisions)
+    return {"events": len(digest.decisions), "assessed": assessed,
+        "unassessed": len(digest.decisions) - assessed,
+        "verified_stories": sum(story.status == "verified-analysis" for story in digest.stories),
+        "source_excerpts": sum(story.status == "source-excerpt" for story in digest.stories),
+        "assessment_failures": dict(Counter(event.decision for event in digest.decisions
+                                             if event.assessment is None))}
+
+
 def render_parts(digest, max_bytes=80 * 1024):
     environment = Environment(loader=FileSystemLoader(ROOT / "templates"), undefined=StrictUndefined,
         autoescape=select_autoescape(enabled_extensions=("html.j2",), default_for_string=True),
@@ -32,6 +42,7 @@ def render_parts(digest, max_bytes=80 * 1024):
 
     def render(stories, index, total, continued, reserve=False):
         context = dict(digest=digest, stories=stories, topics=TOPICS, labels=LABELS, counts=counts,
+            ai_coverage=ai_coverage(digest),
             status_labels=STATUS, empty_states=empty, continued=continued, index=index, total=total,
             language_code="en", takeaways=[by_id[i] for i in digest.takeaways if i in by_id])
         context["note_sources"] = {sid: by_id[sid].citations[0] for note in digest.notes for sid in note.story_ids if sid in by_id}

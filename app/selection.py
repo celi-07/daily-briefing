@@ -36,7 +36,7 @@ def select(events, registry, threshold):
     return [event for event in events if event.eligible]
 
 
-def source_story(event, registry, *, unassessed=False):
+def source_story(event, registry, *, unassessed=False, failure_reason=""):
     articles = sorted((registry[aid] for aid in event.article_ids),
                       key=lambda a: (a.trust == "unknown", a.quality != "full", -len(a.text), a.id))
     article = articles[0]
@@ -54,8 +54,9 @@ def source_story(event, registry, *, unassessed=False):
         importance=assessment.scores.total if assessment and not unassessed else None,
         published_at=max(a.published_at for a in articles),
         status="unassessed" if unassessed else "source-excerpt",
-        caveat="Source excerpt; AI importance/analysis unavailable." if unassessed
-               else "Source excerpt; AI summary could not be verified.")
+        caveat=f"AI assessment unavailable: {event.decision}. Source text only; importance is unknown." if unassessed
+               else (f"Source excerpt; AI analysis unavailable: {failure_reason}." if failure_reason
+                     else "Source excerpt; AI summary could not be verified."))
 
 
 def sort_stories(stories):
