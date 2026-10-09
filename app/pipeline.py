@@ -81,7 +81,15 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         if merged:
             engine.assess(merged, registry, notices)
         events = unchanged + merged
-        chosen = select(events, registry, settings.importance_threshold)
+        chosen = select(events, registry, settings.importance_threshold,
+                        world_threshold=settings.world_threshold, market_threshold=settings.market_threshold)
+        # Use the strongest signal first while preserving both purposes when budgets are tight.
+        world = sorted((e for e in chosen if e.briefing_section == "world"),
+                       key=lambda e: -(e.assessment.world_score or e.assessment.scores.total / 20))
+        market = sorted((e for e in chosen if e.briefing_section == "market"),
+                        key=lambda e: -(e.assessment.market_score or e.assessment.scores.total / 20))
+        chosen = [group[i] for i in range(max(len(world), len(market)))
+                  for group in (world, market) if i < len(group)]
         stories = []
         for event in chosen:
             story = engine.summarize(event, registry)

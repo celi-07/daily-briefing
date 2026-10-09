@@ -46,6 +46,8 @@ class Settings(Record):
     language: str = "English"
     window_hours: int = Field(default=24, ge=1, le=168)
     importance_threshold: float = Field(default=70, ge=0, le=100)
+    world_threshold: int = Field(default=3, ge=1, le=5)
+    market_threshold: int = Field(default=3, ge=1, le=5)
     http_timeout: float = Field(default=15, ge=1, le=60)
     http_requests: int = Field(default=400, ge=1)
     http_bytes: int = Field(default=3_000_000, ge=1024)

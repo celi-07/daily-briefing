@@ -6,3 +6,17 @@ The headline and why_it_matters must also be supported. Label interpretation as 
 causation. Do not invent numbers, dates, investment advice, economic connections or future events.
 Source announcements are announcements, not independent verification of all advertised benefits.
 Use an explicit caveat if evidence is an excerpt. Never fill gaps with generic context or speculation.
+
+For reporting_basis=reported, explicitly attribute the development to the publisher and preserve any named
+company/authority attribution. An allegation must remain an allegation. Do not imply independent verification.
+For primary-statement, say the organization announced/reported it; advertised benefits are still claims.
+For limited evidence, summarize only concrete supported facts and explain what context is missing.
+
+When market_context_required=true, return market_context; otherwise use null unless it is directly useful.
+affected lists only companies, assets or sectors explicitly identified in the evidence, each with article_ids.
+Do not invent tickers or supply-chain beneficiaries. mechanism is a brief, conditional explanation connecting
+the reported event to those exposures, with no trade recommendation or guaranteed price direction.
+timing uses explicit evidence; say 'Timing unclear from the source' when it is not given. watch lists concrete
+evidence-grounded follow-ups with article_ids; dates only when supplied. It may be empty. uncertainty explains
+the missing facts or conditions that would change the interpretation. Do not invent a deadline, probability,
+price target, entry/exit, market consensus or whether the event is already priced in.

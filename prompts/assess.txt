@@ -12,16 +12,33 @@ event_key must be precise English: canonical entity + specific development/actio
 described in Indonesian and English should have identical keys. Separate different announcements of the same entity.
 entities must name actual organizations/persons/instruments, not generic themes.
 facts contain supported, attributable factual statements with article_ids supporting every statement.
-Use supported only for adequate evidence. Limited excerpts/title-only items cannot justify invented details.
+Use supported for adequate evidence, including credible reporting of a company's or authority's announcement.
+Use limited for usable but incomplete excerpts. Limited does not mean false: extract only supported facts.
+Title-only items cannot justify invented details. A reported allegation is not a proven underlying allegation;
+an announcement or confirmation explicitly attributed to a named company/authority is reportable as such.
 Treat unconfirmed allegations/rumors as unverified; conflicting evidence is disputed, unless the claim explicitly
 describes the disagreement. Treat promotions, predictions and personal opinions as low novelty/relevance news.
 primary_own_statement is true ONLY when a configured primary source is announcing its OWN statement or data;
 it does not independently verify promised benefits or someone else's claims.
-high_risk covers third-party allegations, hacks, extraordinary price/financial claims needing corroboration.
+high_risk flags sensitive claims, hacks and extraordinary financial claims for careful attribution and auditing;
+it is not a ban on reporting breaches, bankruptcies, asset theft, restrictions or cancelled IPOs.
 independent_origins lists article IDs representing genuinely independent ORIGINAL reporting, not reprints,
 syndicated wire copies, reposts, or an X post merely linking to another article.
 
-Score 0–5 for each component, with a short evidence-based reason. Python applies weights and thresholds.
+Always return non-null world_score and market_score, independently scored 0–5. Python selects an event if
+either meets its threshold; there is no fixed story count. Set regions and themes only from supplied evidence.
+World score: 0 irrelevant; 1 routine/opinion/promotion; 2 incremental niche update; 3 meaningful new development;
+4 major national/sector development; 5 systemic/global change. Cover China and US technology, AI models,
+chips/manufacturing, science, company developments, policy and the global/Indonesian economy. A meaningful
+technical advance may score 3 or more even without urgency or an immediate financial impact. Mere use of
+AI/chip keywords, marketing claims without a concrete development, and duplicate roundups are not enough.
+Market score: 0 no identified exposure; 1 generic commentary; 2 minor/indirect; 3 material company/sector
+catalyst; 4 major market/policy catalyst; 5 systemic shock. Material breaches, bankrupt exchanges, stolen BTC
+or gold, restrictions, cancelled IPOs, earnings and central-bank decisions are candidates for 3 or more when
+their scope supports it. Judge materiality, not sensational wording. Do not claim a trade direction or priced-in
+status. Low urgency must not suppress a meaningful development or medium-term catalyst.
+
+Also score 0–5 for each legacy component, with a short evidence-based reason; this remains descriptive.
 Impact: 0 no material impact; 1 tiny niche effect; 2 limited sector; 3 notable sector/regional effect;
 4 major institution/policy/market effect; 5 systemic/global or major national economic effect.
 Relevance: 0 off-topic; 1 incidental mention; 2 indirect; 3 useful topic development; 4 directly useful;

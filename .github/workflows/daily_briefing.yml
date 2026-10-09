@@ -94,6 +94,8 @@ jobs:
           AI_REQUESTS: ${{ vars.AI_REQUESTS }}
           AI_TOKENS: ${{ vars.AI_TOKENS }}
           AI_SECONDS: ${{ vars.AI_SECONDS }}
+          WORLD_THRESHOLD: ${{ vars.WORLD_THRESHOLD }}
+          MARKET_THRESHOLD: ${{ vars.MARKET_THRESHOLD }}
           AI_ASSESSMENT_FRACTION: ${{ vars.AI_ASSESSMENT_FRACTION }}
           ASSESSMENT_EVIDENCE_CHARS: ${{ vars.ASSESSMENT_EVIDENCE_CHARS }}
           EVIDENCE_CHARS: ${{ vars.EVIDENCE_CHARS }}

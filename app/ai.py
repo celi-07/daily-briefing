@@ -88,15 +88,21 @@ def numbers(text):
 
 def validate_draft(draft, event, registry):
     allowed = set(event.article_ids)
-    for claim in draft.summary:
+    context = draft.market_context
+    claims = draft.summary + (context.affected + context.watch if context else [])
+    for claim in claims:
         if not set(claim.article_ids) <= allowed:
             raise AIError("Draft cites unknown article IDs")
         evidence = " ".join(registry[aid].title + " " + registry[aid].text + " " +
                             registry[aid].published_at.isoformat() for aid in claim.article_ids)
         if not numbers(claim.text) <= numbers(evidence):
             raise AIError("Draft introduces unsupported numeric values")
-    evidence = " ".join(registry[aid].title + " " + registry[aid].text for aid in event.article_ids)
-    if not numbers(draft.headline + " " + draft.why_it_matters) <= numbers(evidence):
+    evidence = " ".join(registry[aid].title + " " + registry[aid].text + " " +
+                        registry[aid].published_at.isoformat() for aid in event.article_ids)
+    prose = draft.headline + " " + draft.why_it_matters + " " + draft.caveat
+    if context:
+        prose += " " + context.mechanism + " " + context.timing + " " + context.uncertainty
+    if not numbers(prose) <= numbers(evidence):
         raise AIError("Headline/analysis introduces unsupported numeric values")
 
 
@@ -155,6 +161,10 @@ class StructuredEngine:
         # A one-event assessment cannot need the output space of a six-event
         # batch. Scale both the actual provider cap and its budget reservation.
         output_limit = min(8192, 1024 * (len(payload) + 1)) if stage == "assess" and isinstance(payload, list) else 8192
+        if stage == "summarize":
+            output_limit = 4096
+        elif stage == "verify":
+            output_limit = 2048
         reserve = len(prompt) // 2 + output_limit
         configured_models = self.configured_models()
         preferred = self.preferred_model if self.preferred_model in configured_models else None
@@ -295,12 +305,17 @@ class StructuredEngine:
     def summarize(self, event, registry):
         data = self.evidence([event], registry)
         data[0]["assessment"] = event.assessment.model_dump(mode="json")
+        data[0]["briefing_section"] = event.briefing_section
+        data[0]["reporting_basis"] = event.reporting_basis
+        data[0]["market_context_required"] = event.briefing_section == "market"
         # Retry only the failed event. A failed verification never becomes confident prose.
         for attempt in range(2):
             try:
                 drafts = self.request("summarize", {"events": data, "revision_attempt": attempt}, Drafts)
                 same_ids(drafts.items, [event.id])
                 draft = drafts.items[0]
+                if event.briefing_section == "market" and draft.market_context is None:
+                    raise AIError("Market catalyst is missing evidence-backed market context")
                 validate_draft(draft, event, registry)
                 verdicts = self.request("verify", {"events": data, "drafts": [draft.model_dump(mode="json")]}, Verdicts)
                 same_ids(verdicts.items, [event.id])
@@ -310,7 +325,8 @@ class StructuredEngine:
                                 event.id, attempt + 1, self.failure_reason)
                     data[0]["repair_reason"] = verdicts.items[0].reason
                     continue
-                cited = sorted({aid for claim in draft.summary for aid in claim.article_ids})
+                context_claims = draft.market_context.affected + draft.market_context.watch if draft.market_context else []
+                cited = sorted({aid for claim in draft.summary + context_claims for aid in claim.article_ids})
                 return Story(event_id=event.id, topic=event.assessment.topic,
                     secondary_topics=event.assessment.secondary_topics, headline=draft.headline,
                     summary=" ".join(claim.text for claim in draft.summary), why_it_matters=draft.why_it_matters,
@@ -318,6 +334,10 @@ class StructuredEngine:
                     citations=[Citation(article_id=aid, source=registry[aid].source_name, url=registry[aid].url,
                                         published_at=registry[aid].published_at) for aid in cited],
                     importance=event.assessment.scores.total, status="verified-analysis",
+                    briefing_section=event.briefing_section, reporting_basis=event.reporting_basis,
+                    world_score=event.assessment.world_score, market_score=event.assessment.market_score,
+                    regions=event.assessment.regions, themes=event.assessment.themes,
+                    market_context=draft.market_context,
                     published_at=max(registry[aid].published_at for aid in event.article_ids))
             except AIError as exc:
                 self.failure_reason = str(exc)
