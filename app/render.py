@@ -36,7 +36,7 @@ def render_parts(digest, max_bytes=80 * 1024, *, include_excerpts=False):
         providers = [h for h in digest.health if topic in h.topics and h.status != "disabled"]
         if providers and all(h.status == "failed" for h in providers):
             empty[topic] = "Sources unavailable; news coverage could not be established."
-        elif any(e.assessment is None for e in digest.decisions):
+        elif any(e.assessment is None or e.eligible and e.assessment.topic == topic for e in digest.decisions):
             empty[topic] = "No verified stories available from the collected evidence."
         else:
             empty[topic] = "No qualifying important stories found in the collected evidence."
