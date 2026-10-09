@@ -56,11 +56,10 @@ def test_openai_strict_schema_and_real_http_contract(schema):
         engine.close()
 
 
-def test_default_provider_never_silently_falls_back_to_gemini():
+def test_missing_openai_key_selects_available_gemini():
     settings = Settings(gemini_api_key="existing-gemini-key")
-    assert isinstance(create_engine(settings), OpenAIEngine)
-    with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
-        settings.validate_ai()
+    assert isinstance(create_engine(settings), GeminiEngine)
+    settings.validate_ai()
     explicit = Settings(ai_provider="gemini", gemini_api_key="existing-gemini-key")
     explicit.validate_ai()
     assert isinstance(create_engine(explicit), GeminiEngine)
@@ -172,14 +171,14 @@ def test_incomplete_ai_blocks_fresh_and_restored_pending_delivery(tmp_path, arti
     digest = build_digest(Settings(), {article.id: article}, [], NOW, engine=FixtureEngine(fixture))
     if not unassessed:
         assert digest.stories[0].status == "source-excerpt"
-    with pytest.raises(ValueError, match="AI briefing incomplete"):
+    with pytest.raises(ValueError, match="No verified AI stories"):
         validate_digest_for_delivery(digest)
     settings = Settings(gmail_address="sender@example.com", gmail_app_password="offline-password", state_dir=tmp_path)
     path, state = prepare_state(settings, digest, render_parts(digest))
     def forbidden(*args, **kwargs):
         raise AssertionError("An incomplete edition must not connect to SMTP or update its frozen state")
     before = path.read_bytes()
-    with pytest.raises(ValueError, match="AI briefing incomplete"):
+    with pytest.raises(ValueError, match="No verified AI stories"):
         send_state(settings, path, load_state(path), forbidden, retry_uncertain=True)
     assert path.read_bytes() == before and all(p["status"] == "pending" for p in state["parts"])
 

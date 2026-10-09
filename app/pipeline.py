@@ -71,7 +71,7 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         else:
             notices.append("News collection unavailable. This is a data-status briefing, not a quiet-market assessment.")
     if any(a.warnings or len(a.text) > settings.evidence_chars for a in registry.values()):
-        notices.append("Some articles have limited or length-bounded evidence. See source excerpts and original links.")
+        notices.append("Some articles provide limited evidence. Original source links show the available context.")
     events = cluster_articles(list(registry.values()))
     owned_engine = engine is None
     engine = engine or create_engine(settings)
@@ -86,16 +86,15 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
         for event in chosen:
             story = engine.summarize(event, registry)
             if story is None:
-                notices.append("Some qualifying stories use source excerpts because AI generation or evidence auditing was unavailable or unsuccessful.")
+                notices.append("Some qualifying stories were omitted because AI analysis could not be verified.")
                 story = source_story(event, registry, failure_reason=getattr(engine, "failure_reason", ""))
             stories.append(story)
-        # Failed assessments remain visible as explicitly unassessed, attributable source excerpts.
-        # They are not silently called important or confirmed by the AI.
+        # Keep failure details in the diagnostic digest; render only verified stories.
         for event in events:
             if event.assessment is None and any(registry[aid].trust in ("primary", "reporter") for aid in event.article_ids):
                 stories.append(source_story(event, registry, unassessed=True))
         stories = sort_stories(stories)
-        eligible_ids = [s.event_id for s in stories if s.importance is not None]
+        eligible_ids = [s.event_id for s in stories if s.status == "verified-analysis"]
         notes = engine.synthesize(stories, registry)
         log.info("Events: %d; assessed: %d; eligible: %d; AI-verified: %d; excerpts/unassessed: %d; "
                  "AI requests: %d; tokens: %d",
@@ -164,7 +163,7 @@ def main(argv=None):
                  "No fresh collection or AI generation; use --dry-run for a fresh preview.",
                  restored_digest.window_end.isoformat(), confirmed, len(restored_parts),
                  verified, len(restored_digest.stories))
-        save_outputs(restored_digest, restored_parts, settings.output_dir, restored=True)
+        save_outputs(restored_digest, render_parts(restored_digest, settings.html_bytes), settings.output_dir, restored=True)
         send_state(settings, path, existing, retry_uncertain=args.retry_uncertain)
         return
     if args.fixture:
@@ -190,11 +189,9 @@ def main(argv=None):
             digest = build_digest(settings, registry, health, cutoff, quotes=fetch_market_snapshot(cutoff))
         finally:
             fetcher.close()
-    parts = render_parts(digest, settings.html_bytes)
+    parts = render_parts(digest, settings.html_bytes, include_excerpts=args.fixture is not None)
     save_outputs(digest, parts, settings.output_dir, offline=args.fixture is not None)
-    if args.fixture is None:
-        # Live previews are acceptance checks too. Keep diagnostic artifacts on
-        # failure, but never report an incomplete AI run as successful.
+    if args.fixture is None and not preview:
         validate_digest_for_delivery(digest)
     if preview:
         # Preserve the historic preview.html at repository root as well as richer artifacts.

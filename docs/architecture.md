@@ -14,7 +14,7 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
     → validated stories or attributed source excerpts
     → optional cited connections/watch items + separate audits
     → HTML + text templates → byte-aware continuation emails
-    → complete AI coverage gate → frozen edition + durable checkpoint → Gmail SMTP
+    → verified stories only → frozen edition + durable checkpoint → Gmail SMTP
 ```
 
 ## Boundaries
@@ -41,7 +41,7 @@ RSS / Cryptowave public sitemap + articles / optional X recent search
 - Every adequately evidenced event scoring at least 70/100 is included. Weights: impact .40, relevance .25, novelty .20, urgency .15, each scored 0–5. There is no maximum per topic; an empty section is honest.
 - Source text remains untrusted data. Importance is an editorial judgment. Schema/ID/numeric checks are deterministic; semantic claim audits use the selected AI provider and retain their limitations.
 - Title-only evidence does not justify detailed analysis. A configured primary source can evidence its own announcement. High-risk third-party claims need independent original reporting; reprints and linked copies do not count twice.
-- Known qualifying events survive generation failures as source excerpts in diagnostics. Failed assessments are separately labeled unassessed excerpts with no invented score. Either condition fails fresh live runs and blocks SMTP for pending saved editions. Confirmed editions remain skipped. Unknown social claims are not promoted to confirmed news.
+- Failed summaries and assessments remain in JSON diagnostics, with safe reasons and no invented scores. Reader HTML/text omit them. Partial failure allows verified stories to be delivered. With no verified stories from collected candidates, delivery is withheld. Frozen pending payloads containing failed-analysis stories cannot be sent; confirmed parts remain skipped.
 - Numeric facts and dates must be present in the cited evidence; source URLs come from the registry. Conditional analysis must not invent causation. Connections/watch items require source-backed stories and another audit.
 - Collection/AI budgets are coverage limits, never hidden story caps. Unknown/future dates are quarantined. Syndication detection, cross-language identity and judgment require calibration on actual output.
 - Assessment shares a configurable fraction (default .8) of request/token/time allowances across initial batches, retries and merged-event reassessment. Exhausting this allowance preserves the remaining budget for summaries/audits; overall limits remain authoritative. Explicit provider rejections refund reserved tokens; uncertain remote outcomes keep conservative estimates. Temporary provider failures do not disable later events or trigger recursive batch splitting. Invalid/truncated responses, evidence-ID errors and oversized token reservations may split assessment batches. A configured fallback within the chosen provider receives temporary primary-model failures promptly, with bounded retries on the final model and no hidden HTTP retries. OpenAI requires all schema properties, including Pydantic defaults; local validation and evidence auditing still apply. Its billing/quota exhaustion fails without repeated requests. Missing keys fail before collection and never trigger a silent provider switch.

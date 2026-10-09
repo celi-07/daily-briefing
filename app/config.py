@@ -95,6 +95,8 @@ class Settings(Record):
             raise ValueError("GMAIL_ADDRESS and GMAIL_APP_PASSWORD are required to send email")
 
     def validate_ai(self):
+        if self.ai_provider == "openai" and self.gemini_api_key.get_secret_value().strip():
+            return
         key_name = "OPENAI_API_KEY" if self.ai_provider == "openai" else "GEMINI_API_KEY"
         if not getattr(self, key_name.lower()).get_secret_value().strip():
             raise ValueError(f"{key_name} is required for AI_PROVIDER={self.ai_provider}; configure the Actions secret before running")

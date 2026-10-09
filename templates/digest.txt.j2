@@ -1,8 +1,6 @@
 MORNING BRIEFING — {{ digest.edition_date }}{% if total > 1 %} — Part {{ index }}/{{ total }}{% endif %}
 News window: {{ digest.window_start|localtime }} – {{ digest.window_end|localtime }}
-AI coverage: {{ ai_coverage.assessed }}/{{ ai_coverage.events }} events assessed · {{ ai_coverage.verified_stories }} evidence-checked stories · {{ ai_coverage.source_excerpts }} summary fallbacks · {{ ai_coverage.unassessed }} unassessed events.
-{% if ai_coverage.unassessed %}Coverage is incomplete. Unassessed excerpts have not passed importance screening; see each item's reason.
-{% endif %}
+{{ ai_coverage.verified_stories }} evidence-checked stories.
 
 {% if index == 1 %}{% if takeaways %}AT A GLANCE
 {% for story in takeaways %}{{ loop.index }}. {{ story.headline }} ({{ labels[story.topic] }})
@@ -29,6 +27,6 @@ COVERAGE & SOURCES
 {% for notice in digest.notices %}{{ notice }}
 {% endfor %}{% for source in digest.health if source.status != 'ok' %}{{ source.name }}: {{ source.status }}. {{ source.detail }}
 {% endfor %}
-All qualifying stories in the collected evidence are included. Importance scores are editorial judgments.
-Automated briefing · Gemini & publisher sources · {{ digest.pipeline_version }}
+Only stories with evidence-checked AI analysis are shown. Importance scores are editorial judgments.
+Automated briefing · AI analysis & publisher sources · {{ digest.pipeline_version }}
 {% if total > 1 %}Part {{ index }} of {{ total }}. Read all numbered emails for the full briefing.{% endif %}

@@ -130,6 +130,15 @@ class StructuredEngine:
         return list(dict.fromkeys(filter(None, [self.primary_model,
             getattr(self.settings, self.model_field.replace("_model", "_fallback_model"))])))
 
+    def provider_for_model(self, model):
+        return self.provider
+
+    def model_enabled(self, model):
+        return True
+
+    def provider_handoff(self, model, exc):
+        return False
+
     def _account_tokens(self, amount, stage):
         self.tokens += amount
         if stage == "assess":
@@ -152,6 +161,8 @@ class StructuredEngine:
         models = list(dict.fromkeys(filter(None, [preferred, *configured_models])))
         transient_reason = ""
         for model in models:
+            if not self.model_enabled(model):
+                continue
             # Give a configured alternative a turn before spending retries on
             # a temporarily unavailable primary. Only the final model retries.
             attempts = 3 if model == models[-1] else 1
@@ -209,17 +220,19 @@ class StructuredEngine:
                     code = getattr(exc, "code", None)
                     if rejected_request(exc):
                         self._account_tokens(-reserve, stage)
+                    handoff = self.provider_handoff(model, exc)
                     temporary = transient_failure(exc)
-                    if temporary and attempt < attempts - 1:
+                    if temporary and not handoff and attempt < attempts - 1:
                         time.sleep(min(20, 2 ** attempt + random.random()))
                         continue
                     # Never log provider exception text (may include request data/API key).
-                    self.failure_reason = provider_failure(exc, self.provider)
-                    log.warning("%s request failed (%s, status %s): %s", self.provider, type(exc).__name__,
+                    provider = self.provider_for_model(model)
+                    self.failure_reason = provider_failure(exc, provider)
+                    log.warning("%s request failed (%s, status %s): %s", provider, type(exc).__name__,
                                 code or "unknown", self.failure_reason)
                     if temporary:
                         transient_reason = self.failure_reason
-                    if code in (401, 403):
+                    if code in (401, 403) and not handoff:
                         self.unavailable = True
                         raise AIError(self.failure_reason, category="provider") from None
                     break
@@ -442,7 +455,53 @@ class OpenAIEngine(StructuredEngine):
         return text, tokens
 
 
+class FailoverEngine(StructuredEngine):
+    """Route providers within one request/token/time budget, without resetting it."""
+    provider = "OpenAI/Gemini"
+
+    def __init__(self, settings, transport=None):
+        super().__init__(settings, transport)
+        self.adapters = {"openai": OpenAIEngine(settings, transport), "gemini": GeminiEngine(settings, transport)}
+        self.openai_disabled = False
+
+    @property
+    def primary_model(self):
+        return "openai:" + self.settings.openai_model
+
+    def configured_models(self):
+        return [provider + ":" + model for provider, adapter in self.adapters.items()
+                for model in adapter.configured_models() if self.model_enabled(provider + ":" + model)]
+
+    def provider_for_model(self, model):
+        return self.adapters[model.split(":", 1)[0]].provider
+
+    def model_enabled(self, model):
+        return not (self.openai_disabled and model.startswith("openai:"))
+
+    def provider_handoff(self, model, exc):
+        if model.startswith("openai:") and getattr(exc, "code", None) in (401, 403, 404, 429):
+            self.openai_disabled = True
+            log.info("OpenAI connection/quota unavailable; using Gemini for remaining requests")
+            return True
+        return False
+
+    def _generate(self, prompt, schema, model, *, max_output_tokens=8192):
+        provider, name = model.split(":", 1)
+        return self.adapters[provider]._generate(prompt, schema, name, max_output_tokens=max_output_tokens)
+
+    def close(self):
+        for adapter in self.adapters.values():
+            adapter.close()
+
+
 def create_engine(settings, transport=None):
-    engine = (OpenAIEngine if settings.ai_provider == "openai" else GeminiEngine)(settings, transport)
+    openai_key = bool(settings.openai_api_key.get_secret_value().strip())
+    gemini_key = bool(settings.gemini_api_key.get_secret_value().strip())
+    if settings.ai_provider == "gemini" or not openai_key and gemini_key:
+        engine = GeminiEngine(settings, transport)
+    elif openai_key and gemini_key:
+        engine = FailoverEngine(settings, transport)
+    else:
+        engine = OpenAIEngine(settings, transport)
     log.info("AI provider: %s; model: %s", engine.provider, engine.primary_model)
     return engine
