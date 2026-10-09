@@ -3,6 +3,7 @@ import html
 import json
 import logging
 import re
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,20 @@ from app.sources import cryptowave, rss, x
 
 log = logging.getLogger(__name__)
 ADAPTERS = {"rss": rss.fetch, "x": x.fetch, "cryptowave": cryptowave.fetch}
+
+
+def assessment_order(events, registry):
+    """Give every source a turn before a high-volume feed consumes the allowance."""
+    buckets = defaultdict(list)
+    for event in events:
+        article = min((registry[aid] for aid in event.article_ids),
+                      key=lambda a: (a.trust == "unknown", a.quality == "title-only", a.id))
+        buckets[article.source_id].append(event)
+    groups = [sorted(buckets[source], key=lambda e: (
+        -max(registry[aid].published_at.timestamp() for aid in e.article_ids), e.id))
+        for source in sorted(buckets)]
+    return [group[i] for i in range(max((len(g) for g in groups), default=0))
+            for group in groups if i < len(group)]
 
 
 def collect(settings, fetcher, start, end):
@@ -72,7 +87,7 @@ def build_digest(settings, registry, health, cutoff, quotes=None, engine=None):
             notices.append("News collection unavailable. This is a data-status briefing, not a quiet-market assessment.")
     if any(a.warnings or len(a.text) > settings.evidence_chars for a in registry.values()):
         notices.append("Some articles provide limited evidence. Original source links show the available context.")
-    events = cluster_articles(list(registry.values()))
+    events = assessment_order(cluster_articles(list(registry.values())), registry)
     owned_engine = engine is None
     engine = engine or create_engine(settings)
     try:

@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from app.ai import AIError, GeminiEngine, validate_draft
 from app.config import Settings
 from app.models import Assessments, Claim, Digest, Draft, Drafts, MarketContext, Synthesis, Verdicts
-from app.pipeline import build_digest
+from app.pipeline import assessment_order, build_digest
 from app.render import render_parts
 from app.selection import select, source_story
 from conftest import NOW
@@ -154,3 +154,25 @@ def test_cross_purpose_story_remains_unique_through_email_partitioning(article_f
     assert len(ids) == len(set(ids)) == 20
     assert all(len(p.html.encode()) <= 18000 for p in parts)
     assert all(f'Event: {eid}' in p.text for p in parts for eid in p.event_ids)
+
+
+def test_late_technology_feed_gets_assessed_before_high_volume_feed_exhausts_budget(article_factory, event_factory):
+    bulk = [article_factory(i, source_id='bulk', topics=['finance']) for i in range(20)]
+    technology = article_factory(99, source_id='technology')
+    articles = bulk + [technology]
+    registry = {a.id: a for a in articles}
+    events = [event_factory(a).model_copy(update={'assessment': None}) for a in articles]
+    ordered = assessment_order(events, registry)
+    assert [e.id for e in ordered] == [e.id for e in assessment_order(list(reversed(events)), registry)]
+    assert len({e.id for e in ordered}) == len(events)
+    assessed = []
+    def transport(prompt, schema, model):
+        rows = json.loads(prompt.split('DATA:\n')[1])
+        assessed.extend(row['articles'][0]['id'] for row in rows)
+        return Assessments(items=[event_factory(registry[row['articles'][0]['id']]).assessment.model_copy(
+            update={'event_id': row['event_id']}) for row in rows]).model_dump_json(), 100
+    engine = GeminiEngine(Settings(ai_requests=4, ai_batch_size=1), transport)
+    engine.assess(ordered, registry, [])
+    assert technology.id in assessed
+    assert engine.requests == 3
+    assert sum(e.assessment is not None for e in ordered) == 3
